@@ -83,6 +83,9 @@ final class AudioPipeline {
     @ObservationIgnored private var interruptionHandlers: [UUID: @MainActor (PracticeInterruptionReason) -> Void] = [:]
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var pendingRestart: Task<Void, Never>?
+    @ObservationIgnored private var voiceProcessingGuard = VoiceProcessingGuard()
+    /// 歌唱伴奏播放中（playSong 到歌曲結束或 stopSong）。
+    @ObservationIgnored private var isSongPlaying = false
     #if DEBUG
     @ObservationIgnored private var syntheticSource: SyntheticInputSource?
     @ObservationIgnored private var syntheticSong: SyntheticSongScript?
@@ -139,6 +142,7 @@ final class AudioPipeline {
     }
 
     func playSong(_ score: SongPlayerScore) {
+        isSongPlaying = true
         #if DEBUG
         if let syntheticSong {
             playSyntheticSong(score, script: syntheticSong)
@@ -149,6 +153,7 @@ final class AudioPipeline {
     }
 
     func stopSong() {
+        isSongPlaying = false
         #if DEBUG
         syntheticSongTask?.cancel()
         syntheticSong?.set(nil)
@@ -190,7 +195,13 @@ final class AudioPipeline {
         case .suspended, .failed: .suspended
         case .idle, .permissionDenied: .idle
         }
-        let commands = AudioInterruptionPolicy.commands(for: event, status: status)
+        if event == .engineConfigurationChanged {
+            voiceProcessingGuard.engineStoppedItself(at: CACurrentMediaTime(), route: routeKey)
+            if isVoiceProcessingActive && !voiceProcessingGuard.allowsVoiceProcessing(on: routeKey) {
+                logger.error("回音消除在此路由無法穩定運作（引擎啟動後隨即停止），改用不消除的模式：\(self.routeKey)")
+            }
+        }
+        let commands = AudioInterruptionPolicy.commands(for: event, status: status, isSongPlaying: isSongPlaying)
         if !commands.isEmpty {
             logger.info("事件 \(String(describing: event)) → \(String(describing: commands))")
         }
@@ -276,7 +287,7 @@ final class AudioPipeline {
                 // sleep 只會因取消而丟出錯誤，取消時由下一行結束
                 try? await Task.sleep(for: .seconds(max(0, time - CACurrentMediaTime())))
                 guard !Task.isCancelled, let self else { return }
-                for handler in self.songEventHandlers.values { handler(SongPlayer.Report(event: event, hostTime: time)) }
+                self.deliverSongReport(SongPlayer.Report(event: event, hostTime: time))
             }
         }
     }
@@ -316,7 +327,7 @@ final class AudioPipeline {
         let input = engine.inputNode
         // 回音消除必須在讀取格式、啟動引擎之前設定（會改變輸入格式）
         isVoiceProcessingActive = false
-        if prefersVoiceProcessing && isOutputBuiltInSpeaker {
+        if prefersVoiceProcessing && isOutputBuiltInSpeaker && voiceProcessingGuard.allowsVoiceProcessing(on: routeKey) {
             do {
                 try input.setVoiceProcessingEnabled(true)
                 input.isVoiceProcessingAGCEnabled = false
@@ -358,6 +369,7 @@ final class AudioPipeline {
 
         engine.prepare()
         try engine.start()
+        voiceProcessingGuard.engineStarted(voiceProcessing: isVoiceProcessingActive, at: CACurrentMediaTime())
 
         self.engine = engine
         captureContext = context
@@ -371,7 +383,9 @@ final class AudioPipeline {
         #if DEBUG
         syntheticSource?.stop()
         syntheticSource = nil
+        syntheticSongTask?.cancel()
         #endif
+        isSongPlaying = false
         // engine.stop() 返回後 IO 回呼已結束，才能釋放回呼使用的物件
         engine?.stop()
         engine = nil
@@ -419,8 +433,11 @@ final class AudioPipeline {
             }
         }
         if let latestLevel { inputLevelDB = latestLevel }
-        songPlayer?.reports.drain { report in
-            for handler in songEventHandlers.values { handler(report) }
-        }
+        songPlayer?.reports.drain { deliverSongReport($0) }
+    }
+
+    private func deliverSongReport(_ report: SongPlayer.Report) {
+        if report.event == .finished { isSongPlaying = false }
+        for handler in songEventHandlers.values { handler(report) }
     }
 }

@@ -68,7 +68,8 @@ enum AudioInterruptionPolicy {
         case suspended
     }
 
-    static func commands(for event: AudioSessionEvent, status: PipelineStatus) -> [PipelineCommand] {
+    /// - Parameter isSongPlaying: 歌唱伴奏播放中。伴奏播放器跟著引擎重建，原本的演唱接不回去。
+    static func commands(for event: AudioSessionEvent, status: PipelineStatus, isSongPlaying: Bool = false) -> [PipelineCommand] {
         guard status != .idle else { return [] }
         let isRunning = status == .running
 
@@ -86,7 +87,8 @@ enum AudioInterruptionPolicy {
         case .mediaServicesReset:
             return [.interruptPractice(.mediaServicesReset)] + (isRunning ? [.restart] : [])
         case .engineConfigurationChanged:
-            return isRunning ? [.restart] : []
+            guard isRunning else { return [] }
+            return isSongPlaying ? [.interruptPractice(.engineFailure), .restart] : [.restart]
         case .appBackgrounded:
             return isRunning ? [.interruptPractice(.appBackgrounded), .suspend] : []
         case .appForegrounded:

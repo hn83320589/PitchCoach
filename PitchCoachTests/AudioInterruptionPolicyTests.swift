@@ -68,6 +68,14 @@ struct AudioInterruptionPolicyTests {
         #expect(commands(.engineConfigurationChanged) == [.restart])
     }
 
+    @Test func configurationChangeDuringSongInterruptsSinging() {
+        // 伴奏播放器跟著引擎重建，原本的演唱接不回去；不中斷的話畫面會永遠停在「預備…」
+        #expect(AudioInterruptionPolicy.commands(for: .engineConfigurationChanged, status: .running, isSongPlaying: true)
+                == [.interruptPractice(.engineFailure), .restart])
+        #expect(AudioInterruptionPolicy.commands(for: .engineConfigurationChanged, status: .running, isSongPlaying: false)
+                == [.restart])
+    }
+
     @Test func eventsAreIgnoredBeforePipelineStarts() {
         for event: AudioSessionEvent in [.interruptionBegan, .routeChanged(.deviceConnected), .engineConfigurationChanged,
                                          .mediaServicesReset, .appBackgrounded, .appForegrounded] {

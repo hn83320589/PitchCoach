@@ -10,6 +10,7 @@ struct LatencyCalibrationView: View {
     @State private var run: SongRun?
     @State private var result: SingingResult?
     @State private var message: String?
+    @State private var subscription: UUID?
 
     var body: some View {
         List {
@@ -37,8 +38,17 @@ struct LatencyCalibrationView: View {
             }
         }
         .navigationTitle("延遲校正")
-        .onAppear { pipeline.prefersVoiceProcessing = false }      // 校正必須讓麥克風收到伴奏
+        .onAppear {
+            pipeline.prefersVoiceProcessing = false      // 校正必須讓麥克風收到伴奏
+            subscription = pipeline.addInterruptionHandler { _ in
+                guard let run else { return }
+                run.stop()
+                self.run = nil
+                message = "校正被中斷（來電、耳機或音訊裝置變更），請再試一次。"
+            }
+        }
         .onDisappear {
+            if let subscription { pipeline.removeInterruptionHandler(subscription) }
             run?.stop()
             pipeline.prefersVoiceProcessing = true
         }
