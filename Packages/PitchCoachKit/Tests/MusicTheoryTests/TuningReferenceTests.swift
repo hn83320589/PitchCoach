@@ -18,4 +18,11 @@ struct TuningReferenceTests {
             }
         }
     }
+
+    @Test func clampingInitializerKeepsValueWithinRange() {
+        #expect(TuningReference(clamping: 400).a4 == 415)
+        #expect(TuningReference(clamping: 500).a4 == 466)
+        #expect(TuningReference(clamping: 440).a4 == 440)
+        #expect(TuningReference(clamping: .nan).a4 == 442)
+    }
 }
