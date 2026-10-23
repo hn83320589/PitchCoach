@@ -29,6 +29,8 @@ public enum PitchVerdict: String, Sendable {
 
 public enum RhythmVerdict: String, Sendable {
     case onTime, early, late, notSung
+    /// 與前一個同音高的音連成一個長音、沒有重新起音：量不到起音時間，不計入節奏正確率。
+    case notSeparated
 }
 
 public struct SungNoteResult: Equatable, Sendable {
@@ -76,7 +78,7 @@ public struct SingingResult: Equatable, Sendable {
     public let notes: [SungNoteResult]
     /// 準的音符 ÷ 全部音符（沒唱算不準）。
     public let pitchAccuracy: Double
-    /// 準時的音符 ÷ 全部音符（沒唱算不準時）。
+    /// 準時的音符 ÷ 量得到起音的音符（沒唱算不準時；沒有分開唱的不計入）。
     public let rhythmAccuracy: Double
     public let weakestRange: WeakRange?
     public let isComplete: Bool
@@ -118,10 +120,12 @@ public struct SingingEvaluator: Sendable {
                                      minimumBreathGap: options.minimumBreathGap, searchLimit: options.onsetSearchLimit)
         let results = included.indices.map { evaluate(index: $0, notes: timeline.notes, detector: detector) }
         let total = Double(max(1, results.count))
+        // 量不到起音時間的音（沒有分開唱）不計入節奏正確率
+        let rhythmJudged = results.filter { $0.rhythmVerdict != .notSeparated }
         return SingingResult(
             notes: results,
             pitchAccuracy: results.isEmpty ? 0 : Double(results.filter { $0.pitchVerdict == .accurate }.count) / total,
-            rhythmAccuracy: results.isEmpty ? 0 : Double(results.filter { $0.rhythmVerdict == .onTime }.count) / total,
+            rhythmAccuracy: rhythmJudged.isEmpty ? 0 : Double(rhythmJudged.filter { $0.rhythmVerdict == .onTime }.count) / Double(rhythmJudged.count),
             weakestRange: WeakRange.find(in: results.map { ($0.note.pitch, $0.pitchVerdict == .accurate) }),
             isComplete: time == nil || time! >= timeline.duration
         )
@@ -147,12 +151,20 @@ public struct SingingEvaluator: Sendable {
         let deviation = vibrato?.centerCents ?? Self.median(cents)
         let pitchVerdict: PitchVerdict = abs(deviation) <= options.pitchTolerance + 1e-9 ? .accurate : (deviation > 0 ? .sharp : .flat)
 
-        let onset = detector.onset(for: index, in: notes)
-        let offset = onset.map { $0 - note.start }
-        let rhythmVerdict: RhythmVerdict = switch offset {
-        case nil: .notSung
-        case let value? where abs(value.timeInterval) <= options.rhythmTolerance.timeInterval + 1e-6: .onTime
-        case let value?: value < .zero ? .early : .late
+        let offset: Duration?
+        let rhythmVerdict: RhythmVerdict
+        switch detector.onset(for: index, in: notes) {
+        case .found(let onset):
+            let value = onset - note.start
+            offset = value
+            rhythmVerdict = abs(value.timeInterval) <= options.rhythmTolerance.timeInterval + 1e-6
+                ? .onTime : (value < .zero ? .early : .late)
+        case .notSeparated:
+            offset = nil
+            rhythmVerdict = .notSeparated
+        case .notFound:
+            offset = nil
+            rhythmVerdict = .notSung
         }
         return SungNoteResult(note: note, centsDeviation: deviation, pitchVerdict: pitchVerdict, vibrato: vibrato,
                               frameCount: analyzed.count, onsetOffset: offset, rhythmVerdict: rhythmVerdict)

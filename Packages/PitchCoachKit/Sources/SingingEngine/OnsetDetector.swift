@@ -6,8 +6,16 @@ import MusicTheory
 /// 2. 音高轉換：連唱換音時，音高曲線穿過前後兩個目標音的中點（換音瞬間分析窗橫跨兩個音，
 ///    常有 1–3 個 frame 沒有音高，因此容許 ≤ 80 ms 的空檔並在兩端之間內插）
 /// 3. 電平上升：同音重複時重新咬字，電平先下降再上升 ≥ 6 dB，取上升過中點的時間
-/// 都找不到時，取搜尋範圍內第一個接近目標音（±100 cents）的有音高 frame。
+/// 都找不到時：若與前一個同音高的音連成一個長音（跨過樂譜起點時發聲沒有中斷），回報「沒有分開唱」——
+/// 此時搜尋範圍內的 frame 屬於前一個音，拿來當起音會得到假的提早或準時；
+/// 否則取搜尋範圍內第一個接近目標音（±100 cents）的有音高 frame。
 struct OnsetDetector {
+    enum Result: Equatable {
+        case found(Duration)
+        case notSeparated
+        case notFound
+    }
+
     let frames: [SungFrame]
     let reference: TuningReference
     let allowsOctaveShift: Bool
@@ -16,22 +24,30 @@ struct OnsetDetector {
     let minimumLevelRise = 6.0
     let maximumCrossingGap: Duration = .milliseconds(80)
 
-    func onset(for index: Int, in notes: [ScoredNote]) -> Duration? {
+    func onset(for index: Int, in notes: [ScoredNote]) -> Result {
         let note = notes[index]
         var halfGap = searchLimit
         if index > 0 { halfGap = min(halfGap, (note.start - notes[index - 1].start) / 2) }
         if index + 1 < notes.count { halfGap = min(halfGap, (notes[index + 1].start - note.start) / 2) }
         let window = (note.start - halfGap)...(note.start + halfGap)
 
-        if let time = nearest(voicingOnsets(in: window), to: note.start) { return time }
+        if let time = nearest(voicingOnsets(in: window), to: note.start) { return .found(time) }
         if index > 0, notes[index - 1].pitch != note.pitch,
            let time = nearest(pitchCrossings(from: notes[index - 1].pitch, to: note.pitch, in: window), to: note.start) {
-            return time
+            return .found(time)
         }
-        if let time = nearest(levelRises(in: window), to: note.start) { return time }
+        if let time = nearest(levelRises(in: window), to: note.start) { return .found(time) }
+        if index > 0, notes[index - 1].pitch == note.pitch, isContinuouslyVoiced(across: note.start) { return .notSeparated }
         let voicedInRange = frames.filter { $0.frequency != nil && $0.time >= window.lowerBound && $0.time < note.end }
         let nearTarget = voicedInRange.first { abs(pitch($0.frequency!, near: note.pitch) - Double(note.pitch.midi)) <= 1 }
-        return (nearTarget ?? voicedInRange.first { $0.time >= note.start })?.time
+        return (nearTarget ?? voicedInRange.first { $0.time >= note.start }).map { .found($0.time) } ?? .notFound
+    }
+
+    /// time 前後最近的兩個有音高 frame 相距不超過換氣門檻，即發聲沒有中斷。
+    private func isContinuouslyVoiced(across time: Duration) -> Bool {
+        guard let before = frames.last(where: { $0.frequency != nil && $0.time <= time }),
+              let after = frames.first(where: { $0.frequency != nil && $0.time > time }) else { return false }
+        return after.time - before.time <= minimumBreathGap
     }
 
     private func nearest(_ candidates: [Duration], to target: Duration) -> Duration? {

@@ -232,7 +232,9 @@ private struct SungNoteRow: View {
                 }
             }
             Spacer()
-            Text(rhythmText).font(.callout).foregroundStyle(note.rhythmVerdict == .onTime ? .secondary : Color.orange)
+            // 沒有分開唱不計入節奏正確率，以中性色顯示
+            Text(rhythmText).font(.callout)
+                .foregroundStyle([.onTime, .notSeparated].contains(note.rhythmVerdict) ? .secondary : Color.orange)
         }
         .monospacedDigit()
         .padding(.vertical, 8)
@@ -263,6 +265,7 @@ private struct SungNoteRow: View {
         case .early: "提早 \(ms)"
         case .late: "延遲 \(ms)"
         case .notSung: "—"
+        case .notSeparated: "沒有分開唱"
         }
     }
 }

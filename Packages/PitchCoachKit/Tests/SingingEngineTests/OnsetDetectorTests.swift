@@ -66,6 +66,39 @@ struct OnsetDetectorTests {
         #expect(note.rhythmVerdict == .onTime)
     }
 
+    /// 同音連唱卻沒有重新咬字（小朋友常把〈小星星〉的「C C」唱成一個長音）：三種起音線索都不存在，
+    /// 量不到起音時間，不能退回「搜尋窗內第一個接近目標的 frame」（那屬於前一個音，會得到假的「提早」）。
+    @Test func repeatedNoteSungAsOneSustainedToneIsNotSeparated() throws {
+        let song = try timeline("C4:1 C4:1 G4:1 G4:1", bpm: 100)   // 一拍 0.6 秒
+        let starts = song.notes.map { seconds($0.start) + 0.5 }      // 歌曲從 0.5 秒開始
+        let pitches = song.notes.map { NoteConverter.frequency(of: $0.pitch, reference: .default) }
+        let voice = VoiceSynthesizer(voiceType: .child, vowel: .a, sampleRate: sampleRate)
+        let end = starts.last! + 0.6
+        // 每組同音之間音量與音高都不變，只有 C4 → G4 換音
+        let samples = voice.render(count: Int(sampleRate * (end + 0.3))) { t in
+            guard t >= starts[0], t < end else { return nil }
+            return pitches[starts.lastIndex { $0 <= t }!]
+        }
+        let frames = sungFrames(samples).map {
+            SungFrame(time: $0.time - .milliseconds(500), frequency: $0.frequency, levelDB: $0.levelDB, levelTime: $0.levelTime - .milliseconds(500))
+        }
+        let result = evaluate(song, frames)
+        #expect(result.notes.map(\.rhythmVerdict) == [.onTime, .notSeparated, .onTime, .notSeparated])
+        #expect(result.notes[1].onsetOffset == nil && result.notes[3].onsetOffset == nil)
+        // 量不到起音的音不計入節奏正確率；音準照常判定
+        #expect(result.rhythmAccuracy == 1)
+        #expect(result.notes.allSatisfy { $0.pitchVerdict == .accurate })
+    }
+
+    @Test func fastRepeatedNotesWithoutRearticulationAreNotCountedOnTime() throws {
+        // 200 BPM 的十六分音符：每音 75 ms，搜尋半寬只有 37.5 ms，退回規則會落在 ±80 ms 內而被誤判「準時」
+        let song = try timeline("C4:0.25 C4:0.25 C4:0.25 C4:0.25", bpm: 200)
+        let frames = syntheticFrames(from: -0.2, to: 0, target: Note(midi: 60)) { _ in nil }
+            + syntheticFrames(from: 0, to: 0.4, target: Note(midi: 60)) { _ in 0 }
+        let verdicts = evaluate(song, frames).notes.map(\.rhythmVerdict)
+        #expect(verdicts == [.onTime, .notSeparated, .notSeparated, .notSeparated])
+    }
+
     @Test func songClockUsesWindowCenterAndRemovesLatencies() {
         let clock = SongClock(heardSongStartHostTime: 100, inputLatency: 0.005, calibrationOffset: 0.02,
                               windowDuration: 0.04, hopDuration: 0.01)
