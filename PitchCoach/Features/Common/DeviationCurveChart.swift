@@ -45,6 +45,9 @@ struct DeviationCurveChart: View {
         .chartYScale(domain: -50...50)
         .chartXAxisLabel("秒")
         .chartYAxisLabel("cents")
+        .chartXAxis {
+            AxisMarks(values: Array(stride(from: 0, through: duration, by: 2)))
+        }
         .chartYAxis {
             AxisMarks(values: [-50, -25, -10, 0, 10, 25, 50])
         }
