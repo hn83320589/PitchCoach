@@ -63,4 +63,15 @@ struct StreamingPitchAnalyzerTests {
         frames = collectFrames(analyzer, block, chunkSizes: [2048], startingAt: 3148)
         #expect(frames.map(\.time) == [.milliseconds(4196), .milliseconds(4708)])
     }
+
+    @Test func everyFrameCarriesLevelOfLatestHop() {
+        let analyzer = StreamingPitchAnalyzer(configuration: PitchDetectorConfiguration(sampleRate: 48000))
+        // 前 2048 個樣本靜音，接著振幅 0.1 的正弦（RMS 0.0707 → −23.0 dBFS）
+        let signal = [Float](repeating: 0, count: 2048) + SignalGenerator.sine(frequency: 440, sampleRate: 48000, count: 1024, amplitude: 0.1)
+        var frames: [PitchFrame] = []
+        signal.withUnsafeBufferPointer { analyzer.process($0, startingAt: 0) { frames.append($0) } }
+        #expect(frames.count == 3)
+        #expect(frames[0].levelDB < -150)                 // 靜音
+        #expect(abs(frames[2].levelDB - (-23.01)) < 0.5)  // 最後一個 hop 全是正弦（512 樣本非整數週期，RMS 略有偏差）
+    }
 }

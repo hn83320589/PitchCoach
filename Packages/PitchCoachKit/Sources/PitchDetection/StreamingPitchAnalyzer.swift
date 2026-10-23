@@ -1,3 +1,4 @@
+import Accelerate
 import Foundation
 
 /// 一次分析的結果。`time` 為分析窗結束（最新樣本之後）的時間點，以串流起點為 0。
@@ -5,10 +6,14 @@ public struct PitchFrame: Sendable, Equatable {
     public let time: Duration
     /// 沒有明確音高時為 nil。
     public let estimate: PitchEstimate?
+    /// 最近一個 hop（分析窗最後 hopSize 個樣本）的 RMS 電平（dBFS），無論有沒有音高都有值；
+    /// 歌唱模式以它偵測同音重複時的重新咬字。
+    public let levelDB: Double
 
-    public init(time: Duration, estimate: PitchEstimate?) {
+    public init(time: Duration, estimate: PitchEstimate?, levelDB: Double = -.infinity) {
         self.time = time
         self.estimate = estimate
+        self.levelDB = levelDB
     }
 
     public var frequency: Double? { estimate?.frequency }
@@ -56,7 +61,10 @@ public final class StreamingPitchAnalyzer {
             if samplesUntilNextFrame == 0 {
                 let window = UnsafeBufferPointer(start: buffer + count - windowSize, count: windowSize)
                 let windowEnd = samplePosition + Int64(offset)
-                emit(PitchFrame(time: duration(ofSamples: windowEnd), estimate: detector.detect(window)))
+                var rms: Float = 0
+                vDSP_rmsqv(buffer + count - hopSize, 1, &rms, vDSP_Length(hopSize))
+                emit(PitchFrame(time: duration(ofSamples: windowEnd), estimate: detector.detect(window),
+                                levelDB: Double(20 * log10(max(rms, 1e-9)))))
                 samplesUntilNextFrame = hopSize
             }
         }
