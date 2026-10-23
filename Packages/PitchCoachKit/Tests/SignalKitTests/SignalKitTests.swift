@@ -41,3 +41,29 @@ struct SignalKitTests {
         #expect(abs(mean) < 0.002)
     }
 }
+
+struct VoiceSynthesizerTests {
+    @Test func formantMakesHarmonicNearF1Strongest() {
+        // 男聲 /a/ 基頻 130 Hz：F1 = 730 Hz 附近的第 6 泛音（780 Hz）最強。
+        // 共振增益約 5.4（F1）× 2.0（F2）× 1.1（F3）≈ 12.3，除以 1/h 的 6 → 約為基頻的 2 倍
+        let voice = VoiceSynthesizer(voiceType: .male, vowel: .a, sampleRate: 48000)
+        let amplitudes = voice.harmonicAmplitudes(fundamental: 130)
+        let strongest = amplitudes.indices.max { amplitudes[$0] < amplitudes[$1] }!
+        #expect(strongest + 1 == 6)
+        #expect(amplitudes[strongest] > 1.8 * amplitudes[0])
+    }
+
+    @Test func vibratoContourSwingsByRequestedDepth() {
+        let contour = VoiceSynthesizer.vibrato(center: 440, rate: 5.5, depthCents: 60)
+        let peak = contour(1 / (4 * 5.5))            // sin = 1
+        #expect(abs(1200 * log2(peak / 440) - 60) < 1e-9)
+        #expect(abs(contour(0) - 440) < 1e-9)
+    }
+
+    @Test func silenceInPitchContourProducesSilence() {
+        let voice = VoiceSynthesizer(voiceType: .child, vowel: .i, sampleRate: 48000)
+        let samples = voice.render(count: 4800) { $0 < 0.05 ? 440 : nil }
+        #expect(samples[0..<2000].contains { $0 != 0 })
+        #expect(samples[4000...].allSatisfy { $0 == 0 })
+    }
+}
