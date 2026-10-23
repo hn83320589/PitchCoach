@@ -28,6 +28,18 @@ struct PracticeHomeView: View {
                         Image(systemName: "stairs")
                     }
                 }
+                NavigationLink {
+                    SingingPracticeView()
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("歌唱練習").font(.headline)
+                            Text("跟著伴奏唱，看音準與節奏").font(.subheadline).foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "music.mic")
+                    }
+                }
             }
             .navigationTitle("練習")
         }

@@ -79,11 +79,14 @@ final class AudioPipeline {
     @ObservationIgnored private var songPlayer: SongPlayer?
     @ObservationIgnored private var songEventHandlers: [UUID: @MainActor (SongPlayer.Report) -> Void] = [:]
     @ObservationIgnored private var frameHandlers: [UUID: @MainActor (PitchFrame) -> Void] = [:]
+    @ObservationIgnored private var timedFrameHandlers: [UUID: @MainActor (PitchFrame, Double) -> Void] = [:]
     @ObservationIgnored private var interruptionHandlers: [UUID: @MainActor (PracticeInterruptionReason) -> Void] = [:]
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var pendingRestart: Task<Void, Never>?
     #if DEBUG
     @ObservationIgnored private var syntheticSource: SyntheticInputSource?
+    @ObservationIgnored private var syntheticSong: SyntheticSongScript?
+    @ObservationIgnored private var syntheticSongTask: Task<Void, Never>?
     #endif
     @ObservationIgnored private lazy var displayLink = DisplayLinkDriver { [weak self] target in
         self?.deliverFrames(displayTime: target)
@@ -103,6 +106,14 @@ final class AudioPipeline {
 
     func removeFrameHandler(_ id: UUID) {
         frameHandlers[id] = nil
+        timedFrameHandlers[id] = nil
+    }
+
+    /// 歌唱模式：同時取得分析窗結束的 host time（秒），用來換算歌曲時間。
+    func addTimedFrameHandler(_ handler: @escaping @MainActor (PitchFrame, Double) -> Void) -> UUID {
+        let id = UUID()
+        timedFrameHandlers[id] = handler
+        return id
     }
 
     /// 練習畫面用：收音被中斷時以原因通知，讓進行中的練習標記為「中斷」。
@@ -128,10 +139,20 @@ final class AudioPipeline {
     }
 
     func playSong(_ score: SongPlayerScore) {
+        #if DEBUG
+        if let syntheticSong {
+            playSyntheticSong(score, script: syntheticSong)
+            return
+        }
+        #endif
         songPlayer?.play(score)
     }
 
     func stopSong() {
+        #if DEBUG
+        syntheticSongTask?.cancel()
+        syntheticSong?.set(nil)
+        #endif
         songPlayer?.stop()
     }
 
@@ -233,7 +254,9 @@ final class AudioPipeline {
     private func startSynthetic(_ scenario: SyntheticScenario) {
         let context = RealtimeCaptureContext(sampleRate: 48000)
         let reference = TuningReference(clamping: Double(UserDefaults.standard.object(forKey: "referenceA4") as? Int ?? 442))
-        let source = SyntheticInputSource(scenario: scenario, reference: reference, context: context)
+        let song = scenario == .singing ? SyntheticSongScript() : nil
+        let source = SyntheticInputSource(scenario: scenario, reference: reference, context: context, song: song)
+        syntheticSong = song
         captureContext = context
         syntheticSource = source
         sampleRate = context.sampleRate
@@ -241,6 +264,21 @@ final class AudioPipeline {
         displayLink.start()
         state = .running
         logger.info("合成輸入啟動：\(scenario.rawValue)")
+    }
+
+    /// UI 測試：沒有真正的 SongPlayer，以計時模擬歌曲起點與結束的回報，合成歌聲依同一時間軸演唱。
+    private func playSyntheticSong(_ score: SongPlayerScore, script: SyntheticSongScript) {
+        let start = CACurrentMediaTime() + Double(score.countInBeats) * score.beatDuration
+        script.set((score, start))
+        syntheticSongTask?.cancel()
+        syntheticSongTask = Task { [weak self] in
+            for (event, time) in [(SongPlayer.Report.Event.songStarted, start), (.finished, start + score.duration + 0.5)] {
+                // sleep 只會因取消而丟出錯誤，取消時由下一行結束
+                try? await Task.sleep(for: .seconds(max(0, time - CACurrentMediaTime())))
+                guard !Task.isCancelled, let self else { return }
+                for handler in self.songEventHandlers.values { handler(SongPlayer.Report(event: event, hostTime: time)) }
+            }
+        }
     }
     #endif
 
@@ -375,6 +413,9 @@ final class AudioPipeline {
             }
             for handler in frameHandlers.values {
                 handler(captured.frame)
+            }
+            for handler in timedFrameHandlers.values {
+                handler(captured.frame, captured.hostTime)
             }
         }
         if let latestLevel { inputLevelDB = latestLevel }

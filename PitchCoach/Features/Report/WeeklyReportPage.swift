@@ -29,6 +29,17 @@ struct WeeklyReportPage: View {
                 longToneSection
                 scaleSection
             }
+            if let singing = report.singing {
+                section("歌唱") {
+                    row("完成次數", "\(singing.sessionCount) 次")
+                    row("平均音準正確率", String(format: "%.0f%%", singing.meanPitchAccuracy * 100))
+                    row("平均節奏正確率", String(format: "%.0f%%", singing.meanRhythmAccuracy * 100))
+                    if let weak = singing.weakestRange {
+                        row("最常唱不準的音高區段", "\(weak.lowest.name()) – \(weak.highest.name())（\(weak.total) 音中 \(weak.missed) 個）",
+                            valueColor: .orange)
+                    }
+                }
+            }
             HStack(alignment: .top, spacing: 14) {
                 tendencySection(title: "最常偏高的音", notes: report.sharpestNotes, color: .orange)
                 tendencySection(title: "最常偏低的音", notes: report.flattestNotes, color: .blue)

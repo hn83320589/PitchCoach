@@ -1,6 +1,7 @@
 import Foundation
 import MusicTheory
 import PracticeEngine
+import SingingEngine
 import SwiftData
 
 /// 一次練習的紀錄。列舉以 raw string 儲存（SwiftData 的 #Predicate 對自訂 enum 支援不穩定）。
@@ -30,6 +31,12 @@ final class PracticeSessionRecord {
     var reachedSteps: Int?
     var totalSteps: Int?
 
+    // 歌唱
+    var songTitle: String?
+    var singingPitchAccuracy: Double?
+    var singingRhythmAccuracy: Double?
+    var transposition: Int?
+
     @Relationship(deleteRule: .cascade, inverse: \NoteStatRecord.session)
     var noteStats: [NoteStatRecord] = []
 
@@ -46,6 +53,9 @@ final class PracticeSessionRecord {
         standardDeviationCents = summary.longToneStandardDeviationCents
         reachedSteps = summary.scaleReachedSteps
         totalSteps = summary.scaleTotalSteps
+        songTitle = summary.title
+        singingPitchAccuracy = summary.singingPitchAccuracy
+        singingRhythmAccuracy = summary.singingRhythmAccuracy
     }
 
     convenience init(longTone result: LongToneResult, startedAt: Date, reference: TuningReference,
@@ -79,6 +89,21 @@ final class PracticeSessionRecord {
         self.init(summary: summary, reference: reference, interruption: nil)
     }
 
+    /// 歌唱：每個音符都存（沒唱的 frameCount 為 0），reached 表示唱準；保留實際偏差供細節顯示。
+    convenience init(singing result: SingingResult, title: String, transposition: Int, startedAt: Date,
+                     activeDuration: TimeInterval, reference: TuningReference, interruption: PracticeInterruptionReason?) {
+        let summary = SessionSummary(singing: result, title: title, startedAt: startedAt, activeDuration: activeDuration,
+                                     status: Self.status(interruption, complete: result.isComplete))
+        self.init(summary: summary, reference: reference, interruption: interruption)
+        self.transposition = transposition
+        noteStats = result.notes.enumerated().map { index, note in
+            let record = NoteStatRecord(stat: NoteStat(note: note.note.pitch, meanCents: note.centsDeviation ?? 0, frameCount: note.frameCount),
+                                        stepIndex: index, reached: note.pitchVerdict == .accurate)
+            record.onsetOffsetMilliseconds = note.onsetOffset.map { $0.seconds * 1000 }
+            return record
+        }
+    }
+
     // MARK: - 讀取
 
     var kind: PracticeKind { PracticeKind(rawValue: kindRaw) ?? .longTone }
@@ -101,11 +126,19 @@ final class PracticeSessionRecord {
     }
 
     var summary: SessionSummary {
-        SessionSummary(startedAt: startedAt, activeDuration: activeDuration, kind: kind, status: status,
-                       longToneAccuracy: inToleranceRatio, longToneMeanCents: meanCents,
-                       longToneStandardDeviationCents: standardDeviationCents,
-                       scaleReachedSteps: reachedSteps, scaleTotalSteps: totalSteps,
-                       noteStats: sortedNoteStats.map(\.stat))
+        let stats = sortedNoteStats
+        let isSinging = kind == .singing
+        return SessionSummary(
+            startedAt: startedAt, activeDuration: activeDuration, kind: kind, status: status,
+            longToneAccuracy: inToleranceRatio, longToneMeanCents: meanCents,
+            longToneStandardDeviationCents: standardDeviationCents,
+            scaleReachedSteps: reachedSteps, scaleTotalSteps: totalSteps,
+            singingPitchAccuracy: singingPitchAccuracy, singingRhythmAccuracy: singingRhythmAccuracy, title: songTitle,
+            // 歌唱只把有唱、且偏差在合理範圍的音列入各音偏差（與 SessionSummary(singing:) 一致）
+            noteStats: stats.filter {
+                !isSinging || ($0.frameCount > 0 && abs($0.meanCents) <= SessionSummary.singingDeviationLimit)
+            }.map(\.stat),
+            noteOutcomes: isSinging ? stats.map { NoteOutcome(note: Note(midi: $0.midi), accurate: $0.reached) } : [])
     }
 
     private static func status(_ interruption: PracticeInterruptionReason?, complete: Bool) -> PracticeStatus {
@@ -126,6 +159,8 @@ final class NoteStatRecord {
     var meanCents: Double
     var frameCount: Int
     var reached: Bool
+    /// 歌唱：實際起音 − 樂譜起音（毫秒）。
+    var onsetOffsetMilliseconds: Double?
     var session: PracticeSessionRecord?
 
     init(stat: NoteStat, stepIndex: Int?, reached: Bool) {

@@ -3,12 +3,14 @@ import Foundation
 import MusicTheory
 import PitchDetection
 import PracticeEngine
+import SingingEngine
 import SwiftData
 
 /// UI 測試與截圖用的示範資料（啟動參數 -seedDemoData）。
 ///
 /// 把合成的 frame 餵給真正的 LongToneEvaluator／ScaleEvaluator，紀錄的數字與正式邏輯完全一致。
-/// 學生設定：每天開著調音器自由練習 8–30 分鐘；長音逐週進步；F#、C# 習慣偏高，B♭、E 習慣偏低。
+/// 學生設定：每天開著調音器自由練習 8–30 分鐘；長音逐週進步；F#、C# 習慣偏高，B♭、E 習慣偏低；
+/// 唱歌時 A4 以上容易偏低，起音偶爾延遲。
 @MainActor
 enum DemoDataSeeder {
     private static let frameInterval = 512.0 / 48000   // 與實際 hop 相同
@@ -47,6 +49,10 @@ enum DemoDataSeeder {
                 }
                 context.insert(record)
                 start = start.addingTimeInterval(25 * 60)
+            }
+            if daysAgo.isMultiple(of: 2) {
+                let song = Songbook.songs[Int(rng.uniform() * Double(Songbook.songs.count))]
+                context.insert(try singing(song, progress: progress, start: start, rng: &rng))
             }
         }
         try context.save()
@@ -97,6 +103,31 @@ enum DemoDataSeeder {
         }
         return PracticeSessionRecord(scale: evaluator.result(), startedAt: start, activeDuration: Double(index) * frameInterval,
                                      reference: reference, interruption: interrupted ? .audioInterruption : nil)
+    }
+}
+
+extension DemoDataSeeder {
+    fileprivate static func singing(_ song: Song, progress: Double, start: Date, rng: inout DemoRandom) throws -> PracticeSessionRecord {
+        let timeline = try SongTimeline(melody: song.melody(), beatsPerMinute: song.beatsPerMinute, reference: reference)
+        var evaluator = SingingEvaluator(timeline: timeline, reference: reference, options: SingingOptions())
+        for note in timeline.notes {
+            // 高音偏低（越來越少）、一般音 ±8 cents 的隨機偏差；約 15% 的音起音延遲 100–150 ms
+            let bias = (note.pitch.midi >= 69 ? -30 * (1 - 0.5 * progress) : 0) + rng.gaussian() * 8
+            let late = rng.uniform() < 0.15 ? 0.1 + rng.uniform() * 0.05 : rng.gaussian() * 0.02
+            let begin = note.start.seconds + late, end = note.end.seconds - 0.05
+            var t = note.start.seconds - 0.04
+            while t < end {
+                let voiced = t >= begin
+                let frequency = NoteConverter.frequency(of: note.pitch, reference: reference) * pow(2, (bias + rng.gaussian() * 3) / 1200)
+                let time = Duration.nanoseconds(Int64(t * 1e9))
+                evaluator.process(SungFrame(time: time, frequency: voiced ? frequency : nil, levelDB: voiced ? -22 : -70, levelTime: time))
+                t += frameInterval
+            }
+        }
+        let result = evaluator.result()
+        return PracticeSessionRecord(singing: result, title: song.title, transposition: 0, startedAt: start,
+                                     activeDuration: timeline.duration.seconds + timeline.countIn.seconds,
+                                     reference: reference, interruption: nil)
     }
 }
 

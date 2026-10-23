@@ -4,7 +4,7 @@ import XCTest
 ///
 /// 啟動參數：
 /// - `-uiTesting`：SwiftData 使用記憶體內儲存
-/// - `-syntheticScenario <tuner|longTone|scale>`：以合成訊號取代麥克風
+/// - `-syntheticScenario <tuner|longTone|scale|singing>`：以合成訊號取代麥克風（singing 會跟著伴奏時間軸演唱）
 /// - `-referenceA4 442`、`-showsLatencyOverlay NO`：固定設定（UserDefaults 參數網域）
 /// - `-seedDemoData`：在記憶體內儲存放入 28 天示範紀錄（以真正的判定器產生）
 @MainActor
@@ -133,5 +133,40 @@ final class PitchCoachUITests: XCTestCase {
         sleep(33)
         app.buttons["紀錄"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["自由練習"].waitForExistence(timeout: 5), "離開調音器時應存下自由練習紀錄")
+    }
+
+    func testSingingTranspositionAndFullSongWithKaraokeRoll() {
+        let app = launch("singing")
+        app.buttons["練習"].firstMatch.tap()
+        app.staticTexts["歌唱練習"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["practice.start"].waitForExistence(timeout: 5))
+
+        element(app, "singing.songPicker").firstMatch.tap()
+        app.buttons["瑪莉有隻小綿羊"].firstMatch.tap()
+        let range = element(app, "singing.range")
+        XCTAssertTrue(range.waitForExistence(timeout: 3))
+        XCTAssertEqual(range.value as? String, "C4 – G4")
+
+        // AC-21：移調 +2，音域同步改變
+        let transpose = app.steppers.element(boundBy: 1)
+        transpose.buttons.element(boundBy: 1).tap()
+        transpose.buttons.element(boundBy: 1).tap()
+        XCTAssertEqual(range.value as? String, "D4 – A4")
+        attachScreenshot("12-singing-setup")
+
+        app.buttons["practice.start"].tap()
+        XCTAssertTrue(element(app, "singing.pitchRoll").waitForExistence(timeout: 5))
+        sleep(7)
+        attachScreenshot("13-singing-karaoke")
+
+        let pitch = element(app, "singing.pitchAccuracy")
+        XCTAssertTrue(pitch.waitForExistence(timeout: 40), "唱完後應顯示結果")
+        // 合成歌聲每 8 個音中第 4 個偏高 32¢、第 7 個偏低 30¢：26 個音中 6 個不準 → 約 77%
+        let pitchPercent = Int((pitch.value as? String ?? "").replacingOccurrences(of: "%", with: "")) ?? -1
+        let rhythmPercent = Int((element(app, "singing.rhythmAccuracy").value as? String ?? "").replacingOccurrences(of: "%", with: "")) ?? -1
+        XCTAssertTrue((65...85).contains(pitchPercent), "音準正確率 \(pitchPercent)%")
+        XCTAssertGreaterThanOrEqual(rhythmPercent, 85, "節奏正確率 \(rhythmPercent)%")
+        XCTAssertTrue(element(app, "singing.weakestRange").exists)
+        attachScreenshot("14-singing-result")
     }
 }

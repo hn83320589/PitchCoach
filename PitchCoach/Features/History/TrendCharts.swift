@@ -18,6 +18,7 @@ struct TrendCharts: View {
         let daily = PracticeAnalytics.dailyMinutes(summaries, days: 30, endingAt: now, calendar: calendar)
         let accuracy = PracticeAnalytics.longToneAccuracyTrend(summaries, days: 30, endingAt: now, calendar: calendar)
         let notes = PracticeAnalytics.noteDeviations(summaries, in: window)
+        let singing = PracticeAnalytics.singingAccuracyTrend(summaries, days: 30, endingAt: now, calendar: calendar)
 
         VStack(alignment: .leading, spacing: 28) {
             chartSection("每日練習分鐘數") {
@@ -47,6 +48,25 @@ struct TrendCharts: View {
                             AxisValueLabel { Text("\(value.as(Int.self) ?? 0)%") }
                         }
                     }
+                    .frame(height: 160)
+                }
+            }
+
+            if !singing.isEmpty {
+                chartSection("歌唱正確率") {
+                    Chart {
+                        ForEach(singing, id: \.day) { day in
+                            LineMark(x: .value("日期", day.day, unit: .day), y: .value("正確率", day.pitch * 100),
+                                     series: .value("項目", "音準"))
+                                .foregroundStyle(by: .value("項目", "音準"))
+                            LineMark(x: .value("日期", day.day, unit: .day), y: .value("正確率", day.rhythm * 100),
+                                     series: .value("項目", "節奏"))
+                                .foregroundStyle(by: .value("項目", "節奏"))
+                        }
+                    }
+                    .chartXScale(domain: window.start...window.end)
+                    .chartXAxis { weekAxis }
+                    .chartYScale(domain: 0...100)
                     .frame(height: 160)
                 }
             }

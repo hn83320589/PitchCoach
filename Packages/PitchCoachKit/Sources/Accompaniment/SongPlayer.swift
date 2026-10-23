@@ -59,6 +59,11 @@ public final class SongPlayer: TimedRealtimeRenderer, @unchecked Sendable {
 
         public let event: Event
         public let hostTime: Double
+
+        public init(event: Event, hostTime: Double) {
+            self.event = event
+            self.hostTime = hostTime
+        }
     }
 
     private struct Command: Sendable {

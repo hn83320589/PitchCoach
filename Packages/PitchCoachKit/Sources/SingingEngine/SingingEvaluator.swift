@@ -37,17 +37,39 @@ public struct SungNoteResult: Equatable, Sendable {
     public let centsDeviation: Double?
     public let pitchVerdict: PitchVerdict
     public let vibrato: VibratoEstimate?
+    /// 判定所用的 frame 數（沒唱為 0），統計時作為權重。
+    public let frameCount: Int
     /// 實際起音 − 樂譜起音。
     public let onsetOffset: Duration?
     public let rhythmVerdict: RhythmVerdict
 }
 
-/// 最常唱不準的音高區段。
+/// 最常唱不準的音高區段：5 個半音寬的滑動區段中，不準（偏高、偏低、沒唱）比例最高、至少 3 個音者。
 public struct WeakRange: Equatable, Sendable {
+    public static let width = 5
+    public static let minimumNotes = 3
+
     public let lowest: Note
     public let highest: Note
     public let missed: Int
     public let total: Int
+
+    /// - Parameter outcomes: 每個音符的目標音與是否唱準。
+    public static func find(in outcomes: [(note: Note, accurate: Bool)]) -> WeakRange? {
+        guard let low = outcomes.map(\.note.midi).min(), let high = outcomes.map(\.note.midi).max() else { return nil }
+        var best: (rate: Double, range: WeakRange)?
+        for start in low...max(low, high - width + 1) {
+            let inRange = outcomes.filter { (start..<(start + width)).contains($0.note.midi) }
+            guard inRange.count >= minimumNotes else { continue }
+            let missed = inRange.filter { !$0.accurate }.count
+            let rate = Double(missed) / Double(inRange.count)
+            guard missed > 0, rate > (best?.rate ?? 0) else { continue }
+            let pitches = inRange.map(\.note.midi)
+            best = (rate, WeakRange(lowest: Note(midi: pitches.min()!), highest: Note(midi: pitches.max()!),
+                                    missed: missed, total: inRange.count))
+        }
+        return best?.range
+    }
 }
 
 public struct SingingResult: Equatable, Sendable {
@@ -62,9 +84,6 @@ public struct SingingResult: Equatable, Sendable {
 
 /// 歌唱判定（docs/SINGING_MODE.md §4、§5、§7.3）。收集整首的 frame，結束時逐音判定。
 public struct SingingEvaluator: Sendable {
-    public static let weakRangeWidth = 5       // 半音
-    public static let weakRangeMinimumNotes = 3
-
     public let timeline: SongTimeline
     public let reference: TuningReference
     public let options: SingingOptions
@@ -103,7 +122,7 @@ public struct SingingEvaluator: Sendable {
             notes: results,
             pitchAccuracy: results.isEmpty ? 0 : Double(results.filter { $0.pitchVerdict == .accurate }.count) / total,
             rhythmAccuracy: results.isEmpty ? 0 : Double(results.filter { $0.rhythmVerdict == .onTime }.count) / total,
-            weakestRange: Self.weakestRange(results),
+            weakestRange: WeakRange.find(in: results.map { ($0.note.pitch, $0.pitchVerdict == .accurate) }),
             isComplete: time == nil || time! >= timeline.duration
         )
     }
@@ -112,7 +131,7 @@ public struct SingingEvaluator: Sendable {
         let note = notes[index]
         let inNote = frames.filter { $0.frequency != nil && $0.time >= note.start && $0.time < note.end }
         guard !inNote.isEmpty else {
-            return SungNoteResult(note: note, centsDeviation: nil, pitchVerdict: .notSung, vibrato: nil,
+            return SungNoteResult(note: note, centsDeviation: nil, pitchVerdict: .notSung, vibrato: nil, frameCount: 0,
                                   onsetOffset: nil, rhythmVerdict: .notSung)
         }
 
@@ -136,29 +155,12 @@ public struct SingingEvaluator: Sendable {
         case let value?: value < .zero ? .early : .late
         }
         return SungNoteResult(note: note, centsDeviation: deviation, pitchVerdict: pitchVerdict, vibrato: vibrato,
-                              onsetOffset: offset, rhythmVerdict: rhythmVerdict)
+                              frameCount: analyzed.count, onsetOffset: offset, rhythmVerdict: rhythmVerdict)
     }
 
     static func median(_ values: [Double]) -> Double {
         let sorted = values.sorted()
         let middle = sorted.count / 2
         return sorted.count.isMultiple(of: 2) ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
-    }
-
-    /// 5 個半音寬的滑動區段中，不準（偏高、偏低、沒唱）比例最高、至少 3 個音者。
-    static func weakestRange(_ results: [SungNoteResult]) -> WeakRange? {
-        guard let low = results.map(\.note.pitch.midi).min(), let high = results.map(\.note.pitch.midi).max() else { return nil }
-        var best: (rate: Double, range: WeakRange)?
-        for start in low...max(low, high - weakRangeWidth + 1) {
-            let inRange = results.filter { (start..<(start + weakRangeWidth)).contains($0.note.pitch.midi) }
-            guard inRange.count >= weakRangeMinimumNotes else { continue }
-            let missed = inRange.filter { $0.pitchVerdict != .accurate }.count
-            let rate = Double(missed) / Double(inRange.count)
-            guard missed > 0, rate > (best?.rate ?? 0) else { continue }
-            let pitches = inRange.map(\.note.pitch.midi)
-            best = (rate, WeakRange(lowest: Note(midi: pitches.min()!), highest: Note(midi: pitches.max()!),
-                                    missed: missed, total: inRange.count))
-        }
-        return best?.range
     }
 }

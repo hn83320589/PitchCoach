@@ -15,7 +15,7 @@ let package = Package(
     targets: [
         .target(name: "MusicTheory"),
         .target(name: "PitchDetection"),
-        .target(name: "PracticeEngine", dependencies: ["MusicTheory", "PitchDetection"]),
+        .target(name: "PracticeEngine", dependencies: ["MusicTheory", "PitchDetection", "SingingEngine"]),
         .target(name: "SignalKit"),
         .target(name: "Accompaniment", dependencies: ["PitchDetection"]),
         .target(name: "SingingEngine", dependencies: ["MusicTheory", "PitchDetection"]),
@@ -24,6 +24,6 @@ let package = Package(
         .testTarget(name: "PitchDetectionTests", dependencies: ["PitchDetection", "SignalKit"]),
         .testTarget(name: "SingingEngineTests", dependencies: ["SingingEngine", "MusicTheory", "PitchDetection", "SignalKit"]),
         .testTarget(name: "AccompanimentTests", dependencies: ["Accompaniment", "PitchDetection"]),
-        .testTarget(name: "PracticeEngineTests", dependencies: ["PracticeEngine", "MusicTheory", "PitchDetection"]),
+        .testTarget(name: "PracticeEngineTests", dependencies: ["PracticeEngine", "MusicTheory", "PitchDetection", "SingingEngine"]),
     ]
 )

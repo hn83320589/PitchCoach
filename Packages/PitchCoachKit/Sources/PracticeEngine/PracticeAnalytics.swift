@@ -1,11 +1,13 @@
 import Foundation
 import MusicTheory
+import SingingEngine
 
 public enum PracticeKind: String, CaseIterable, Sendable {
     case longTone
     case scale
     /// 開著調音器自由演奏（只計時間，不計成績）。
     case freePractice
+    case singing
 }
 
 public enum PracticeStatus: String, CaseIterable, Sendable {
@@ -26,6 +28,17 @@ public struct NoteStat: Equatable, Sendable {
     }
 }
 
+/// 歌唱的一個音符是否唱準（沒唱算不準），用於「最常唱不準的音高區段」。
+public struct NoteOutcome: Equatable, Sendable {
+    public let note: Note
+    public let accurate: Bool
+
+    public init(note: Note, accurate: Bool) {
+        self.note = note
+        self.accurate = accurate
+    }
+}
+
 /// 統計用的練習紀錄。App 把 SwiftData 的紀錄轉成此值型別，所有統計都在 Package 內計算。
 public struct SessionSummary: Equatable, Sendable {
     public let startedAt: Date
@@ -38,12 +51,19 @@ public struct SessionSummary: Equatable, Sendable {
     public let longToneStandardDeviationCents: Double?
     public let scaleReachedSteps: Int?
     public let scaleTotalSteps: Int?
+    public let singingPitchAccuracy: Double?
+    public let singingRhythmAccuracy: Double?
+    /// 歌唱的曲名。
+    public let title: String?
     public let noteStats: [NoteStat]
+    public let noteOutcomes: [NoteOutcome]
 
     public init(startedAt: Date, activeDuration: TimeInterval, kind: PracticeKind, status: PracticeStatus,
                 longToneAccuracy: Double? = nil, longToneMeanCents: Double? = nil,
                 longToneStandardDeviationCents: Double? = nil,
-                scaleReachedSteps: Int? = nil, scaleTotalSteps: Int? = nil, noteStats: [NoteStat] = []) {
+                scaleReachedSteps: Int? = nil, scaleTotalSteps: Int? = nil,
+                singingPitchAccuracy: Double? = nil, singingRhythmAccuracy: Double? = nil, title: String? = nil,
+                noteStats: [NoteStat] = [], noteOutcomes: [NoteOutcome] = []) {
         self.startedAt = startedAt
         self.activeDuration = activeDuration
         self.kind = kind
@@ -53,7 +73,11 @@ public struct SessionSummary: Equatable, Sendable {
         self.longToneStandardDeviationCents = longToneStandardDeviationCents
         self.scaleReachedSteps = scaleReachedSteps
         self.scaleTotalSteps = scaleTotalSteps
+        self.singingPitchAccuracy = singingPitchAccuracy
+        self.singingRhythmAccuracy = singingRhythmAccuracy
+        self.title = title
         self.noteStats = noteStats
+        self.noteOutcomes = noteOutcomes
     }
 }
 
@@ -77,6 +101,20 @@ public struct ScaleSummary: Equatable, Sendable {
     public let meanAbsoluteCents: Double?
 }
 
+public struct SingingSummary: Equatable, Sendable {
+    public let sessionCount: Int
+    public let meanPitchAccuracy: Double
+    public let meanRhythmAccuracy: Double
+    /// 區間內所有歌唱音符（含中斷練習已唱的部分）中最常唱不準的音高區段。
+    public let weakestRange: WeakRange?
+}
+
+public struct DailySingingAccuracy: Equatable, Sendable {
+    public let day: Date
+    public let pitch: Double
+    public let rhythm: Double
+}
+
 public struct WeeklyReport: Equatable, Sendable {
     public let interval: DateInterval
     public let practiceDays: Int
@@ -91,6 +129,8 @@ public struct WeeklyReport: Equatable, Sendable {
     public let longTone: LongToneSummary?
     /// 只統計完成的音階練習。
     public let scale: ScaleSummary?
+    /// 只統計完成的歌唱練習（音高區段含中斷的部分）。
+    public let singing: SingingSummary?
     public let sharpestNotes: [NoteDeviation]
     public let flattestNotes: [NoteDeviation]
 }
@@ -117,6 +157,18 @@ public enum PracticeAnalytics {
         return window.compactMap { day in
             let accuracies = (byDay[day] ?? []).compactMap(\.longToneAccuracy)
             return accuracies.isEmpty ? nil : DailyValue(day: day, value: mean(accuracies))
+        }
+    }
+
+    /// 只回傳有完成歌唱練習的日子：當天的平均音準與節奏正確率。
+    public static func singingAccuracyTrend(_ sessions: [SessionSummary], days: Int, endingAt end: Date,
+                                            calendar: Calendar) -> [DailySingingAccuracy] {
+        let window = lastDays(days, endingAt: end, calendar: calendar)
+        let byDay = Dictionary(grouping: completed(.singing, in: sessions)) { calendar.startOfDay(for: $0.startedAt) }
+        return window.compactMap { day in
+            guard let sessions = byDay[day], !sessions.isEmpty else { return nil }
+            return DailySingingAccuracy(day: day, pitch: mean(sessions.compactMap(\.singingPitchAccuracy)),
+                                        rhythm: mean(sessions.compactMap(\.singingRhythmAccuracy)))
         }
     }
 
@@ -154,6 +206,7 @@ public enum PracticeAnalytics {
             dailyMinutes: minutesPerDay(inRange, days: days, calendar: calendar),
             longTone: longToneSummary(inRange),
             scale: scaleSummary(inRange),
+            singing: singingSummary(inRange),
             sharpestNotes: Array(deviations.filter { $0.meanCents > tendencyThresholdCents }
                 .sorted { $0.meanCents > $1.meanCents }.prefix(tendencyListLength)),
             flattestNotes: Array(deviations.filter { $0.meanCents < -tendencyThresholdCents }
@@ -186,6 +239,16 @@ public enum PracticeAnalytics {
         let absoluteSum = stats.reduce(0.0) { $0 + abs($1.meanCents) * Double($1.frameCount) }
         return ScaleSummary(sessionCount: done.count, meanReachedRatio: mean(ratios),
                             meanAbsoluteCents: frames > 0 ? absoluteSum / Double(frames) : nil)
+    }
+
+    private static func singingSummary(_ sessions: [SessionSummary]) -> SingingSummary? {
+        let done = completed(.singing, in: sessions)
+        guard !done.isEmpty else { return nil }
+        let outcomes = sessions.filter { $0.kind == .singing }.flatMap(\.noteOutcomes).map { ($0.note, $0.accurate) }
+        return SingingSummary(sessionCount: done.count,
+                              meanPitchAccuracy: mean(done.compactMap(\.singingPitchAccuracy)),
+                              meanRhythmAccuracy: mean(done.compactMap(\.singingRhythmAccuracy)),
+                              weakestRange: WeakRange.find(in: outcomes))
     }
 
     private static func minutesPerDay(_ sessions: [SessionSummary], days: [Date], calendar: Calendar) -> [DailyValue] {
@@ -251,5 +314,23 @@ extension SessionSummary {
                   scaleReachedSteps: result.reachedCount,
                   scaleTotalSteps: result.steps.count,
                   noteStats: noteStats)
+    }
+}
+
+extension SessionSummary {
+    /// 歌唱各音偏差只收 |偏差| ≤ 100 cents 的音（唱成別的音或沒容許八度時的低八度不代表音準傾向）。
+    public static let singingDeviationLimit = 100.0
+
+    public init(singing result: SingingResult, title: String, startedAt: Date, activeDuration: TimeInterval,
+                status: PracticeStatus? = nil) {
+        let noteStats = result.notes.compactMap { note -> NoteStat? in
+            guard let cents = note.centsDeviation, abs(cents) <= Self.singingDeviationLimit, note.frameCount > 0 else { return nil }
+            return NoteStat(note: note.note.pitch, meanCents: cents, frameCount: note.frameCount)
+        }
+        self.init(startedAt: startedAt, activeDuration: activeDuration, kind: .singing,
+                  status: status ?? (result.isComplete ? .completed : .interrupted),
+                  singingPitchAccuracy: result.pitchAccuracy, singingRhythmAccuracy: result.rhythmAccuracy, title: title,
+                  noteStats: noteStats,
+                  noteOutcomes: result.notes.map { NoteOutcome(note: $0.note.pitch, accurate: $0.pitchVerdict == .accurate) })
     }
 }

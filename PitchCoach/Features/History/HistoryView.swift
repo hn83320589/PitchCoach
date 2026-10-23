@@ -58,6 +58,8 @@ extension PracticeSessionRecord {
             "\(scaleKey?.displayName ?? "音階") \(direction == .ascendingDescending ? "上下行" : "上行")"
         case .freePractice:
             "自由練習"
+        case .singing:
+            "歌唱 \(songTitle ?? "")"
         }
     }
 
@@ -66,6 +68,8 @@ extension PracticeSessionRecord {
         case .longTone: inToleranceRatio.map { String(format: "%.0f%%", $0 * 100) } ?? "—"
         case .scale: "到位 \(reachedSteps ?? 0)/\(totalSteps ?? 0)"
         case .freePractice: formatPracticeDuration(activeDuration)
+        case .singing:
+            String(format: "音準 %.0f%%・節奏 %.0f%%", (singingPitchAccuracy ?? 0) * 100, (singingRhythmAccuracy ?? 0) * 100)
         }
     }
 
@@ -78,6 +82,7 @@ extension PracticeKind {
         case .longTone: "waveform.path"
         case .scale: "stairs"
         case .freePractice: "tuningfork"
+        case .singing: "music.mic"
         }
     }
 }
@@ -127,6 +132,8 @@ struct RecordDetailView: View {
                 case .scale: scale
                 case .freePractice:
                     StatTile(title: "演奏時間（開著調音器）", value: formatPracticeDuration(record.activeDuration), emphasized: true)
+                case .singing:
+                    singing
                 }
                 Text("A4 = \(Int(record.referenceA4)) Hz").font(.footnote).foregroundStyle(.secondary)
             }
@@ -143,6 +150,36 @@ struct RecordDetailView: View {
                 StatTile(title: "穩定度（標準差）", value: record.standardDeviationCents.map { String(format: "%.1f ¢", $0) } ?? "—")
             }
             DeviationCurveChart(curve: record.curve).frame(height: 220)
+        }
+    }
+
+    private var singing: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                StatTile(title: "音準正確率", value: String(format: "%.0f%%", (record.singingPitchAccuracy ?? 0) * 100), emphasized: true)
+                StatTile(title: "節奏正確率", value: String(format: "%.0f%%", (record.singingRhythmAccuracy ?? 0) * 100), emphasized: true)
+            }
+            if let transposition = record.transposition, transposition != 0 {
+                Text(String(format: "移調 %+d 個半音", transposition)).font(.footnote).foregroundStyle(.secondary)
+            }
+            VStack(spacing: 0) {
+                ForEach(record.sortedNoteStats, id: \.persistentModelID) { stat in
+                    HStack {
+                        Image(systemName: stat.reached ? "checkmark.circle.fill" : "xmark.circle")
+                            .foregroundStyle(stat.reached ? TunerPalette.inTune : .orange)
+                        Text(Note(midi: stat.midi).name())
+                        Spacer()
+                        Text(stat.frameCount == 0 ? "沒唱" : formattedCents(stat.meanCents)).monospacedDigit()
+                        if let onset = stat.onsetOffsetMilliseconds {
+                            Text(String(format: "%+.0f ms", onset)).font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    Divider()
+                }
+            }
+            .padding(.horizontal)
+            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
         }
     }
 

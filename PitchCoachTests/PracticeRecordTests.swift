@@ -2,6 +2,7 @@ import Foundation
 import MusicTheory
 import PitchDetection
 import PracticeEngine
+import SingingEngine
 import SwiftData
 import Testing
 @testable import PitchCoach
@@ -81,5 +82,27 @@ struct PracticeRecordTests {
         let stored = try #require(try repository.records().first)
         #expect(stored.summary == SessionSummary(startedAt: start, activeDuration: 754, kind: .freePractice, status: .completed))
         #expect(stored.noteStats.isEmpty)
+    }
+
+    @Test func singingRecordKeepsEveryNoteButSummaryFiltersImplausibleDeviations() throws {
+        let repository = try makeRepository()
+        let timeline = try SongTimeline(melody: MelodyParser.parse("C4:1 D4:1 E4:1"), beatsPerMinute: 60, reference: .default)
+        var evaluator = SingingEvaluator(timeline: timeline, reference: .default, options: SingingOptions())
+        for (index, cents) in [(0, 6.0), (1, -1200.0)] {
+            for ms in stride(from: index * 1000, to: (index + 1) * 1000, by: 10) {
+                evaluator.process(SungFrame(time: .milliseconds(ms), frequency: NoteConverter.frequency(of: timeline.notes[index].pitch,
+                                            reference: .default) * pow(2, cents / 1200), levelDB: -20, levelTime: .milliseconds(ms)))
+            }
+        }
+        try repository.save(PracticeSessionRecord(singing: evaluator.result(), title: "測試", transposition: 2, startedAt: start,
+                                                  activeDuration: 3, reference: .default, interruption: nil))
+        let stored = try #require(try repository.records().first)
+        #expect(stored.songTitle == "測試")
+        #expect(stored.transposition == 2)
+        #expect(stored.sortedNoteStats.count == 3)                       // 沒唱的 E4 也保留
+        #expect(abs(stored.sortedNoteStats[1].meanCents + 1200) < 1)     // 實際偏差保留供細節顯示
+        #expect(stored.summary.noteStats.map(\.note.midi) == [60])       // 統計只收合理偏差
+        #expect(stored.summary.noteOutcomes.map(\.accurate) == [true, false, false])
+        #expect(stored.summary == SessionSummary(singing: evaluator.result(), title: "測試", startedAt: start, activeDuration: 3))
     }
 }

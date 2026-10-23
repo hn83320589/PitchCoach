@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import MusicTheory
+import SingingEngine
 @testable import PracticeEngine
 
 struct PracticeAnalyticsTests {
@@ -143,5 +144,36 @@ struct PracticeAnalyticsTests {
         #expect(report.longTone?.sessionCount == 1)
         #expect(PracticeAnalytics.dailyMinutes(sessions, days: 30, endingAt: date(23), calendar: calendar)
             .first { $0.day == calendar.startOfDay(for: date(20)) }?.value == 21)
+    }
+
+    private func singing(_ start: Date, pitch: Double, rhythm: Double, status: PracticeStatus = .completed,
+                         outcomes: [(Int, Bool)] = []) -> SessionSummary {
+        SessionSummary(startedAt: start, activeDuration: 30, kind: .singing, status: status,
+                       singingPitchAccuracy: pitch, singingRhythmAccuracy: rhythm, title: "小星星",
+                       noteOutcomes: outcomes.map { NoteOutcome(note: Note(midi: $0.0), accurate: $0.1) })
+    }
+
+    @Test func singingTrendAndWeeklySummaryUseCompletedSessions() throws {
+        let sessions = [
+            singing(date(20, 9), pitch: 0.6, rhythm: 0.8, outcomes: [(60, true), (67, false), (69, false)]),
+            singing(date(20, 19), pitch: 0.8, rhythm: 0.6, outcomes: [(62, true), (69, false), (71, true)]),
+            singing(date(21), pitch: 0.1, rhythm: 0.1, status: .interrupted, outcomes: [(67, false)]),
+        ]
+        let trend = PracticeAnalytics.singingAccuracyTrend(sessions, days: 30, endingAt: date(23), calendar: calendar)
+        #expect(trend.count == 1)
+        #expect(abs(trend[0].pitch - 0.7) < 1e-12)
+        #expect(abs(trend[0].rhythm - 0.7) < 1e-12)
+
+        let interval = DateInterval(start: calendar.startOfDay(for: date(17)), end: calendar.startOfDay(for: date(24)))
+        let report = PracticeAnalytics.weeklyReport(sessions, interval: interval, calendar: calendar)
+        let singing = try #require(report.singing)
+        #expect(singing.sessionCount == 2)
+        #expect(abs(singing.meanPitchAccuracy - 0.7) < 1e-12)
+        // 整週（含中斷的部分）：F4–A4 區段（實際出現 G4 ×2、A4 ×2）4 個全不準，
+        // 比 G4–B4 區段（5 個中 4 個不準）更差
+        let weak = try #require(singing.weakestRange)
+        #expect(weak.lowest.name() == "G4")
+        #expect(weak.highest.name() == "A4")
+        #expect(weak.missed == 4 && weak.total == 4)
     }
 }
