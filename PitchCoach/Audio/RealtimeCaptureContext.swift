@@ -1,10 +1,13 @@
+import Accelerate
 import AVFAudio
 import PitchDetection
 
-/// 一個分析結果，附上分析窗結束時對應的 host time（秒），用來量測到畫面的延遲。
+/// 一個分析結果，附上分析窗結束時對應的 host time（秒，用來量測到畫面的延遲）
+/// 與最近一個 IO buffer 的輸入電平（dBFS，用於電平表與除錯）。
 struct CapturedFrame: Sendable {
     let frame: PitchFrame
     let hostTime: Double
+    let inputLevelDB: Float
 }
 
 /// 音訊 IO 執行緒專用的擷取狀態。
@@ -12,7 +15,7 @@ struct CapturedFrame: Sendable {
 /// 建立後只由 `AVAudioSinkNode` 的回呼呼叫 `receive`（單一執行緒），主執行緒只透過 `mailbox.drain` 取值。
 /// `receive` 不配置記憶體、不等待鎖（StreamingPitchAnalyzer 與 RealtimeMailbox 皆預先配置）。
 final class RealtimeCaptureContext: @unchecked Sendable {
-    let mailbox = RealtimeMailbox(capacity: 256, placeholder: CapturedFrame(frame: PitchFrame(time: .zero, estimate: nil), hostTime: 0))
+    let mailbox = RealtimeMailbox(capacity: 256, placeholder: CapturedFrame(frame: PitchFrame(time: .zero, estimate: nil), hostTime: 0, inputLevelDB: -.infinity))
     let sampleRate: Double
     private let analyzer: StreamingPitchAnalyzer
 
@@ -40,10 +43,13 @@ final class RealtimeCaptureContext: @unchecked Sendable {
         let startPosition = Int64(time.mSampleTime)
         let bufferHostTime = time.mFlags.contains(.hostTimeValid) ? AVAudioTime.seconds(forHostTime: time.mHostTime) : 0
         let bufferStartSeconds = Double(startPosition) / sampleRate
+        var rms: Float = 0
+        vDSP_rmsqv(samples.baseAddress!, 1, &rms, vDSP_Length(frameCount))
+        let levelDB = 20 * log10(max(rms, 1e-9))
 
         analyzer.process(samples, startingAt: startPosition) { frame in
             let hostTime = bufferHostTime + (frame.time.seconds - bufferStartSeconds)
-            mailbox.push(CapturedFrame(frame: frame, hostTime: hostTime))
+            mailbox.push(CapturedFrame(frame: frame, hostTime: hostTime, inputLevelDB: levelDB))
         }
     }
 }

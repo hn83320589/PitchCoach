@@ -35,6 +35,10 @@ final class AudioPipeline {
     private(set) var latency = LatencyStatistics()
     /// 硬體輸入延遲（AVAudioSession.inputLatency + IO buffer）。
     private(set) var hardwareInputLatency: Double = 0
+    /// 最近一個 IO buffer 的輸入電平（dBFS）。
+    private(set) var inputLevelDB: Float = -.infinity
+    /// 啟動後收到的分析 frame 總數（除錯用）。
+    private(set) var receivedFrameCount = 0
 
     @ObservationIgnored private var engine: AVAudioEngine?
     @ObservationIgnored private var captureContext: RealtimeCaptureContext?
@@ -138,7 +142,10 @@ final class AudioPipeline {
 
     private func deliverFrames(displayTime: CFTimeInterval) {
         guard let captureContext else { return }
+        var latestLevel: Float?
         captureContext.mailbox.drain { captured in
+            receivedFrameCount += 1
+            latestLevel = captured.inputLevelDB
             if captured.frame.estimate != nil, captured.hostTime > 0 {
                 latency.record(displayTime - captured.hostTime)
             }
@@ -146,5 +153,6 @@ final class AudioPipeline {
                 handler(captured.frame)
             }
         }
+        if let latestLevel { inputLevelDB = latestLevel }
     }
 }

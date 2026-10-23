@@ -96,16 +96,22 @@ private struct NoteDisplay: View {
     }
 }
 
-private struct ReadoutRow: View {
+struct ReadoutRow: View {
     let reading: TunerReading?
 
     var body: some View {
         HStack(spacing: 32) {
-            readout(title: "偏差", value: reading.map { String(format: "%+.0f ¢", $0.cents) } ?? "—",
+            readout(title: "偏差", value: reading.map { Self.formatCents($0.cents) } ?? "—",
                     color: TunerPalette.color(forCents: reading?.cents))
             readout(title: "頻率", value: reading.map { String(format: "%.1f Hz", $0.frequency) } ?? "—",
                     color: .primary)
         }
+    }
+
+    /// 四捨五入後為 0 時顯示「0 ¢」，避免出現「−0 ¢」讓學生誤以為偏低。
+    static func formatCents(_ cents: Double) -> String {
+        let rounded = Int(cents.rounded())
+        return rounded == 0 ? "0 ¢" : String(format: "%+d ¢", rounded)
     }
 
     private func readout(title: String, value: String, color: Color) -> some View {
@@ -131,6 +137,8 @@ private struct LatencyOverlay: View {
                         (stats.percentile(50) ?? 0) * 1000, (stats.percentile(95) ?? 0) * 1000, stats.count))
             Text(String(format: "硬體輸入 %.1f ms　取樣率 %.0f Hz",
                         pipeline.hardwareInputLatency * 1000, pipeline.sampleRate ?? 0))
+            Text(String(format: "輸入電平 %.1f dBFS　已接收 %d frames",
+                        pipeline.inputLevelDB, pipeline.receivedFrameCount))
         }
         .font(.caption.monospacedDigit())
         .foregroundStyle(.secondary)
