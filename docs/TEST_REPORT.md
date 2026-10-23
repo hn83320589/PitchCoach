@@ -126,7 +126,7 @@ UI 測試以啟動參數 `-syntheticScenario` 讓收音管線改吃合成訊號�
 
 ## 5. 實機驗收
 
-裝置：iPhone 15 Pro Max（iOS 27.0.1）、AirPods Pro。測試音為 `scripts/make-test-tone.py` 產生的 442 Hz（A4 = 442 Hz），由另一台裝置在約 30 cm 外播放。截圖在 `docs/device/`。
+裝置：iPhone 15 Pro Max（iOS 27.0.1）、AirPods Pro。測試音為 `scripts/make-test-tone.py` 產生的 442 Hz（A4 = 442 Hz），由另一台裝置在約 30 cm 外播放。截圖在 `docs/device/`。`ac12-music.png`、`ac12-resume.png` 的動態島含正在播放內容的縮圖，已裁掉最上方 170 像素的狀態列，其餘未修改。
 
 ### 5.1 AC-11 音訊路由
 
