@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "PracticeEngine", targets: ["PracticeEngine"]),
         .library(name: "SignalKit", targets: ["SignalKit"]),
         .library(name: "Accompaniment", targets: ["Accompaniment"]),
+        .library(name: "SingingEngine", targets: ["SingingEngine"]),
     ],
     targets: [
         .target(name: "MusicTheory"),
@@ -17,9 +18,11 @@ let package = Package(
         .target(name: "PracticeEngine", dependencies: ["MusicTheory", "PitchDetection"]),
         .target(name: "SignalKit"),
         .target(name: "Accompaniment"),
+        .target(name: "SingingEngine", dependencies: ["MusicTheory", "PitchDetection"]),
         .testTarget(name: "MusicTheoryTests", dependencies: ["MusicTheory"]),
         .testTarget(name: "SignalKitTests", dependencies: ["SignalKit"]),
         .testTarget(name: "PitchDetectionTests", dependencies: ["PitchDetection", "SignalKit"]),
+        .testTarget(name: "SingingEngineTests", dependencies: ["SingingEngine", "MusicTheory", "PitchDetection", "SignalKit"]),
         .testTarget(name: "AccompanimentTests", dependencies: ["Accompaniment", "PitchDetection"]),
         .testTarget(name: "PracticeEngineTests", dependencies: ["PracticeEngine", "MusicTheory", "PitchDetection"]),
     ]
