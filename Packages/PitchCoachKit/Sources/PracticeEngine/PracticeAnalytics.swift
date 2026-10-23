@@ -217,3 +217,34 @@ public enum PracticeAnalytics {
         values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count)
     }
 }
+
+// MARK: - 從練習結果建立摘要
+
+extension SessionSummary {
+    /// 長音：目標音的統計成為唯一的 NoteStat。未指定狀態時依結果是否完整決定。
+    public init(longTone result: LongToneResult, startedAt: Date, status: PracticeStatus? = nil) {
+        let noteStats = result.meanCents.map { [NoteStat(note: result.target, meanCents: $0, frameCount: result.statFrameCount)] } ?? []
+        self.init(startedAt: startedAt,
+                  activeDuration: result.analyzedDuration.timeInterval,
+                  kind: .longTone,
+                  status: status ?? (result.isComplete ? .completed : .interrupted),
+                  longToneAccuracy: result.inToleranceRatio,
+                  longToneMeanCents: result.meanCents,
+                  longToneStandardDeviationCents: result.standardDeviationCents,
+                  noteStats: noteStats)
+    }
+
+    /// 音階：每個有資料的步驟成為一筆 NoteStat（同一音高在上下行各一筆，統計時以 frame 加權合併）。
+    public init(scale result: ScaleResult, startedAt: Date, activeDuration: TimeInterval, status: PracticeStatus? = nil) {
+        let noteStats = result.steps.compactMap { step in
+            step.meanCents.map { NoteStat(note: step.note, meanCents: $0, frameCount: step.frameCount) }
+        }
+        self.init(startedAt: startedAt,
+                  activeDuration: activeDuration,
+                  kind: .scale,
+                  status: status ?? (result.isComplete ? .completed : .interrupted),
+                  scaleReachedSteps: result.reachedCount,
+                  scaleTotalSteps: result.steps.count,
+                  noteStats: noteStats)
+    }
+}

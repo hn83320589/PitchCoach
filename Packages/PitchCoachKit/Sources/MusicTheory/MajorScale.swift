@@ -1,5 +1,5 @@
 /// 音階練習可選的 12 個大調（升降記號皆不超過 6 個）。
-public enum MajorKey: CaseIterable, Sendable {
+public enum MajorKey: String, CaseIterable, Sendable {
     case c, g, d, a, e, b, fSharp, dFlat, aFlat, eFlat, bFlat, f
 
     public var tonic: PitchClass {
