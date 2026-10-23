@@ -57,11 +57,16 @@ struct WeeklyReportPage: View {
     }
 
     private var summaryRow: some View {
-        HStack(spacing: 10) {
-            tile("練習天數", "\(report.practiceDays) 天")
-            tile("總時數", formatPracticeDuration(report.totalDuration))
-            tile("練習次數", "\(report.sessionCount) 次")
-            tile("中斷", "\(report.interruptedCount) 次")
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                tile("練習天數", "\(report.practiceDays) 天")
+                tile("總時數", formatPracticeDuration(report.totalDuration))
+                tile("練習次數", "\(report.sessionCount) 次")
+                tile("中斷", "\(report.interruptedCount) 次")
+            }
+            Text("總時數含自由練習（開著調音器演奏）\(formatPracticeDuration(report.freePracticeDuration))，以及長音、音階練習 \(formatPracticeDuration(report.totalDuration - report.freePracticeDuration))。")
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
         }
     }
 

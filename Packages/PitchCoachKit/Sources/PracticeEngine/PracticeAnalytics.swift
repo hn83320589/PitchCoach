@@ -4,6 +4,8 @@ import MusicTheory
 public enum PracticeKind: String, CaseIterable, Sendable {
     case longTone
     case scale
+    /// 開著調音器自由演奏（只計時間，不計成績）。
+    case freePractice
 }
 
 public enum PracticeStatus: String, CaseIterable, Sendable {
@@ -78,8 +80,10 @@ public struct ScaleSummary: Equatable, Sendable {
 public struct WeeklyReport: Equatable, Sendable {
     public let interval: DateInterval
     public let practiceDays: Int
-    /// 總練習時間（秒）。
+    /// 總練習時間（秒），含自由練習。
     public let totalDuration: TimeInterval
+    /// 其中自由練習的時間（秒）。
+    public let freePracticeDuration: TimeInterval
     public let sessionCount: Int
     public let interruptedCount: Int
     public let dailyMinutes: [DailyValue]
@@ -93,7 +97,7 @@ public struct WeeklyReport: Equatable, Sendable {
 
 /// 趨勢圖與週報的計算（docs/ARCHITECTURE.md §10）。
 ///
-/// - 分鐘數依**開始時間**所在的當地日期分桶，含中斷的練習
+/// - 分鐘數依**開始時間**所在的當地日期分桶，含中斷的練習與自由練習
 /// - 長音準確率只用完成的練習（中斷的練習時間短，比例會失真）
 /// - 各音偏差以 frame 數加權，含中斷練習中已完成的部分
 public enum PracticeAnalytics {
@@ -144,6 +148,7 @@ public enum PracticeAnalytics {
             interval: interval,
             practiceDays: Set(inRange.map { calendar.startOfDay(for: $0.startedAt) }).count,
             totalDuration: inRange.reduce(0) { $0 + $1.activeDuration },
+            freePracticeDuration: inRange.filter { $0.kind == .freePractice }.reduce(0) { $0 + $1.activeDuration },
             sessionCount: inRange.count,
             interruptedCount: inRange.filter { $0.status == .interrupted }.count,
             dailyMinutes: minutesPerDay(inRange, days: days, calendar: calendar),

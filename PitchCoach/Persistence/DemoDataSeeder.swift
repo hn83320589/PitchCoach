@@ -8,7 +8,7 @@ import SwiftData
 /// UI 測試與截圖用的示範資料（啟動參數 -seedDemoData）。
 ///
 /// 把合成的 frame 餵給真正的 LongToneEvaluator／ScaleEvaluator，紀錄的數字與正式邏輯完全一致。
-/// 學生設定：長音逐週進步；F#、C# 習慣偏高，B♭、E 習慣偏低。
+/// 學生設定：每天開著調音器自由練習 8–30 分鐘；長音逐週進步；F#、C# 習慣偏高，B♭、E 習慣偏低。
 @MainActor
 enum DemoDataSeeder {
     private static let frameInterval = 512.0 / 48000   // 與實際 hop 相同
@@ -31,6 +31,9 @@ enum DemoDataSeeder {
             let day = calendar.date(byAdding: .day, value: -daysAgo, to: today)!
             let progress = 1 - Double(daysAgo) / 28          // 0 → 1，越近越穩
             var start = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: day)!
+            let freeMinutes = 8 + rng.uniform() * 22
+            context.insert(PracticeSessionRecord(freePractice: freeMinutes * 60, startedAt: start, reference: reference))
+            start = start.addingTimeInterval((freeMinutes + 2) * 60)
 
             for index in 0..<(1 + Int(rng.uniform() * 3)) {
                 let interrupted = rng.uniform() < 0.08

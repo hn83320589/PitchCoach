@@ -132,4 +132,16 @@ struct PracticeAnalyticsTests {
         #expect(report.sharpestNotes.isEmpty && report.flattestNotes.isEmpty)
         #expect(report.dailyMinutes.allSatisfy { $0.value == 0 })
     }
+
+    @Test func freePracticeCountsTowardMinutesButNotScores() {
+        let sessions = [longTone(date(20), minutes: 1, accuracy: 0.5, mean: 0, std: 0),
+                        SessionSummary(startedAt: date(20, 19), activeDuration: 1200, kind: .freePractice, status: .completed)]
+        let interval = DateInterval(start: calendar.startOfDay(for: date(17)), end: calendar.startOfDay(for: date(24)))
+        let report = PracticeAnalytics.weeklyReport(sessions, interval: interval, calendar: calendar)
+        #expect(report.totalDuration == 1260)
+        #expect(report.freePracticeDuration == 1200)
+        #expect(report.longTone?.sessionCount == 1)
+        #expect(PracticeAnalytics.dailyMinutes(sessions, days: 30, endingAt: date(23), calendar: calendar)
+            .first { $0.day == calendar.startOfDay(for: date(20)) }?.value == 21)
+    }
 }

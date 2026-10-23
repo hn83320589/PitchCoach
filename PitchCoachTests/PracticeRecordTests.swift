@@ -74,4 +74,12 @@ struct PracticeRecordTests {
         #expect(recent.map(\.startedAt) == [start + 2 * 86_400, start + 86_400])
         #expect(try repository.summaries(since: start).count == 3)
     }
+
+    @Test func freePracticeRecordStoresDurationOnly() throws {
+        let repository = try makeRepository()
+        try repository.save(PracticeSessionRecord(freePractice: 754, startedAt: start, reference: .default))
+        let stored = try #require(try repository.records().first)
+        #expect(stored.summary == SessionSummary(startedAt: start, activeDuration: 754, kind: .freePractice, status: .completed))
+        #expect(stored.noteStats.isEmpty)
+    }
 }

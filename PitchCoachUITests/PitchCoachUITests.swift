@@ -126,4 +126,12 @@ final class PitchCoachUITests: XCTestCase {
         sleep(2)
         attachScreenshot("10-share-sheet")
     }
+
+    func testPlayingWithTunerOpenIsRecordedAsFreePractice() {
+        let app = launch("tuner")
+        // 自由練習需演奏滿 30 秒才記錄
+        sleep(33)
+        app.buttons["紀錄"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["自由練習"].waitForExistence(timeout: 5), "離開調音器時應存下自由練習紀錄")
+    }
 }

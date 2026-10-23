@@ -56,6 +56,8 @@ extension PracticeSessionRecord {
             "長音 \(targetNote?.name() ?? "")"
         case .scale:
             "\(scaleKey?.displayName ?? "音階") \(direction == .ascendingDescending ? "上下行" : "上行")"
+        case .freePractice:
+            "自由練習"
         }
     }
 
@@ -63,10 +65,21 @@ extension PracticeSessionRecord {
         switch kind {
         case .longTone: inToleranceRatio.map { String(format: "%.0f%%", $0 * 100) } ?? "—"
         case .scale: "到位 \(reachedSteps ?? 0)/\(totalSteps ?? 0)"
+        case .freePractice: formatPracticeDuration(activeDuration)
         }
     }
 
     var reference: TuningReference { TuningReference(clamping: referenceA4) }
+}
+
+extension PracticeKind {
+    var symbolName: String {
+        switch self {
+        case .longTone: "waveform.path"
+        case .scale: "stairs"
+        case .freePractice: "tuningfork"
+        }
+    }
 }
 
 private struct RecordRow: View {
@@ -74,7 +87,7 @@ private struct RecordRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: record.kind == .longTone ? "waveform.path" : "stairs")
+            Image(systemName: record.kind.symbolName)
                 .foregroundStyle(Color.accentColor)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 3) {
@@ -87,7 +100,9 @@ private struct RecordRow: View {
                             .foregroundStyle(.orange)
                     }
                 }
-                Text("\(record.startedAt.formatted(date: .abbreviated, time: .shortened))・\(formatPracticeDuration(record.activeDuration))")
+                Text(record.kind == .freePractice
+                     ? record.startedAt.formatted(date: .abbreviated, time: .shortened)
+                     : "\(record.startedAt.formatted(date: .abbreviated, time: .shortened))・\(formatPracticeDuration(record.activeDuration))")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
@@ -110,6 +125,8 @@ struct RecordDetailView: View {
                 switch record.kind {
                 case .longTone: longTone
                 case .scale: scale
+                case .freePractice:
+                    StatTile(title: "演奏時間（開著調音器）", value: formatPracticeDuration(record.activeDuration), emphasized: true)
                 }
                 Text("A4 = \(Int(record.referenceA4)) Hz").font(.footnote).foregroundStyle(.secondary)
             }

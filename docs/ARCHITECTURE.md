@@ -526,7 +526,7 @@ public struct ScaleEvaluator {
 
 | 函式 | 定義 |
 |---|---|
-| `dailyMinutes(sessions, days: 30, endingAt:, calendar:)` | 依**開始時間**所在的本地日分桶，加總 `activeDuration`（含中斷的練習）🔶 |
+| `dailyMinutes(sessions, days: 30, endingAt:, calendar:)` | 依**開始時間**所在的本地日分桶，加總 `activeDuration`（含中斷的練習與自由練習，見 D13）🔶 |
 | `longToneAccuracyTrend(...)` | 每日「已完成」長音的 `inToleranceRatio` 平均（中斷的不計入，避免短時間扭曲）🔶 |
 | `noteDeviations(...)` | 每個 MIDI 音的 frame 加權平均偏差（含中斷練習中已完成的部分） |
 | `weeklyReport(sessions, range:, calendar:)` → `WeeklyReport` | 練習天數、總時數、長音（次數／平均準確率／平均偏差／平均標準差）、音階（次數／平均到位率／平均 \|偏差\|）、最常偏高與偏低的音 |
@@ -637,3 +637,4 @@ Package 使用 `swift-tools-version: 6.0`，避免使用 Swift 6.2 以後才有�
 | D10 | 「最常偏高／偏低」定義 | 加權平均 \|±5\| cents 以上、至少 2 次練習、各取前 3 | 以「偏高次數」計 |
 | D11 | 選配功能 | 學生姓名（PDF 標題）、音階「跳過」按鈕 | 不做 |
 | D12 | GitHub repo | 需要你提供或建立 remote（CI 加分項） | 先只在本機 |
+| D13 | 「練習分鐘數」的定義（M7 後新增） | **記錄自由練習**：調音器畫面開著且偵測到演奏的時間（停頓 ≤ 5 秒計入、> 60 秒結束一段、< 30 秒不記錄），存成 `freePractice` 練習類型，只計時間不計成績 | 只計長音／音階（一次約 10 秒，分鐘數失去意義）；計 App 開啟時間（高估） |

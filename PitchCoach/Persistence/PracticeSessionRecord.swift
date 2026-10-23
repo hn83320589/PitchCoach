@@ -73,6 +73,12 @@ final class PracticeSessionRecord {
         }
     }
 
+    /// 自由練習：只記錄演奏時間。
+    convenience init(freePractice duration: TimeInterval, startedAt: Date, reference: TuningReference) {
+        let summary = SessionSummary(startedAt: startedAt, activeDuration: duration, kind: .freePractice, status: .completed)
+        self.init(summary: summary, reference: reference, interruption: nil)
+    }
+
     // MARK: - 讀取
 
     var kind: PracticeKind { PracticeKind(rawValue: kindRaw) ?? .longTone }

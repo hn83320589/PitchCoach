@@ -1,12 +1,15 @@
 import MusicTheory
 import PracticeEngine
+import SwiftData
 import SwiftUI
 
 struct TunerView: View {
     @Environment(AudioPipeline.self) private var pipeline
     @Environment(AppSettings.self) private var settings
+    @Environment(\.modelContext) private var modelContext
     @State private var model = TunerViewModel(reference: .default)
-    @State private var handlerID: UUID?
+    @State private var freePractice = FreePracticeRecorder()
+    @State private var subscriptions: [UUID] = []
 
     var body: some View {
         NavigationStack {
@@ -34,13 +37,30 @@ struct TunerView: View {
         }
         .onAppear {
             model.updateReference(settings.reference)
-            handlerID = pipeline.addFrameHandler { [model] frame in model.process(frame) }
+            freePractice.reference = settings.reference
+            freePractice.save = { [modelContext] record in
+                try PracticeRepository(container: modelContext.container).save(record)
+            }
+            subscriptions = [
+                pipeline.addFrameHandler { [model, freePractice] frame in
+                    model.process(frame)
+                    freePractice.process(frame)
+                },
+                // 來電、背景等中斷時結束目前的自由練習段落
+                pipeline.addInterruptionHandler { [freePractice] _ in freePractice.finish() },
+            ]
         }
         .onDisappear {
-            if let handlerID { pipeline.removeFrameHandler(handlerID) }
+            subscriptions.forEach {
+                pipeline.removeFrameHandler($0)
+                pipeline.removeInterruptionHandler($0)
+            }
+            subscriptions = []
+            freePractice.finish()
         }
         .onChange(of: settings.referenceA4) {
             model.updateReference(settings.reference)
+            freePractice.reference = settings.reference
         }
     }
 
