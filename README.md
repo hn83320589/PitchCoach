@@ -66,7 +66,7 @@ xcodebuild test -project PitchCoach.xcodeproj -scheme PitchCoach \
 scripts/export-screenshots.sh
 ```
 
-GitHub Actions（macOS runner）會在每次 push 執行 `swift test` 並建置 App（`.github/workflows/ci.yml`）。
+GitHub Actions（macOS runner）會在每次 push 執行 `swift test`，並在 iOS 模擬器上建置 App、執行 App 單元測試與 UI 測試（`.github/workflows/ci.yml`）。
 
 ---
 
