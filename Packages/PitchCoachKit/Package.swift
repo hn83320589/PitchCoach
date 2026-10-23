@@ -15,5 +15,6 @@ let package = Package(
         .target(name: "PitchDetection"),
         .target(name: "PracticeEngine", dependencies: ["MusicTheory", "PitchDetection"]),
         .target(name: "SignalKit"),
+        .testTarget(name: "MusicTheoryTests", dependencies: ["MusicTheory"]),
     ]
 )
