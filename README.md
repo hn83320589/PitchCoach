@@ -8,6 +8,7 @@
 - **技術**：SwiftUI、AVAudioEngine、AVAudioSession、SwiftData、Swift Charts、Accelerate/vDSP
 - **相依**：無第三方套件、無後端
 - **音高偵測**：自行實作（McLeod Pitch Method ＋ 諧波加權最小平方精修）
+- **教學文件**：從需求分析、架構、演算法到測試與踩坑紀錄的完整說明，見 [docs/tutorial/](docs/tutorial/00-index.md)
 
 | 調音器 | 長音結果 | 音階結果 | 近 30 天趨勢 | PDF 週報 |
 |---|---|---|---|---|
@@ -94,6 +95,8 @@ PitchCoach/
 ├── docs/ARCHITECTURE.md             # 系統分析與架構設計（含所有設計決策）
 ├── docs/SINGING_MODE.md             # 歌唱模式的系統分析與架構設計
 ├── docs/DEVICE_TESTING.md           # 實機驗收步驟
+├── docs/TEST_REPORT.md              # 測試報告（驗收逐項對照、實測數據、實機結果）
+├── docs/tutorial/                   # 教學文件（需求、架構、演算法、測試、踩坑紀錄）
 └── scripts/                         # 截圖匯出、測試音產生
 ```
 
