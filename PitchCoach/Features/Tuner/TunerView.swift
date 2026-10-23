@@ -89,6 +89,7 @@ private struct NoteDisplay: View {
         .frame(height: 140)
         .contentTransition(.numericText())
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("tuner.note")
     }
 
     /// "C#5" → ("C#", "5")
@@ -106,8 +107,10 @@ struct ReadoutRow: View {
         HStack(spacing: 32) {
             readout(title: "偏差", value: reading.map { Self.formatCents($0.cents) } ?? "—",
                     color: TunerPalette.color(forCents: reading?.cents))
+                .accessibilityIdentifier("tuner.cents")
             readout(title: "頻率", value: reading.map { String(format: "%.1f Hz", $0.frequency) } ?? "—",
                     color: .primary)
+                .accessibilityIdentifier("tuner.frequency")
         }
     }
 
@@ -125,6 +128,9 @@ struct ReadoutRow: View {
                 .foregroundStyle(color)
         }
         .frame(minWidth: 120)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
     }
 }
 

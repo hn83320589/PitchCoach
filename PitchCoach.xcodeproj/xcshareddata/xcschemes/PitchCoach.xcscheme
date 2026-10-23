@@ -38,6 +38,16 @@
                ReferencedContainer = "container:PitchCoach.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "4C0000000000000000000026"
+               BuildableName = "PitchCoachUITests.xctest"
+               BlueprintName = "PitchCoachUITests"
+               ReferencedContainer = "container:PitchCoach.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

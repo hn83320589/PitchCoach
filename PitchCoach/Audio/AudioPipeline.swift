@@ -1,5 +1,6 @@
 import Accompaniment
 import AVFAudio
+import MusicTheory
 import Observation
 import os
 import PitchDetection
@@ -63,6 +64,9 @@ final class AudioPipeline {
     @ObservationIgnored private var interruptionHandlers: [UUID: @MainActor (PracticeInterruptionReason) -> Void] = [:]
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var pendingRestart: Task<Void, Never>?
+    #if DEBUG
+    @ObservationIgnored private var syntheticSource: SyntheticInputSource?
+    #endif
     @ObservationIgnored private lazy var displayLink = DisplayLinkDriver { [weak self] target in
         self?.deliverFrames(displayTime: target)
     }
@@ -98,11 +102,22 @@ final class AudioPipeline {
 
     func start() async {
         guard state != .running else { return }
-        guard await ensureRecordPermission() else {
-            state = .permissionDenied
-            return
+        if !usesSyntheticInput {
+            guard await ensureRecordPermission() else {
+                state = .permissionDenied
+                return
+            }
         }
         restartNow()
+    }
+
+    /// UI 測試以合成訊號取代麥克風（只在 DEBUG 組態可用），不需要麥克風權限。
+    private var usesSyntheticInput: Bool {
+        #if DEBUG
+        SyntheticScenario.fromLaunchArguments() != nil
+        #else
+        false
+        #endif
     }
 
     /// 使用者在「收音已暫停」畫面按「恢復」。
@@ -158,6 +173,12 @@ final class AudioPipeline {
         pendingRestart?.cancel()
         displayLink.stop()
         tearDownEngine()
+        #if DEBUG
+        if let scenario = SyntheticScenario.fromLaunchArguments() {
+            startSynthetic(scenario)
+            return
+        }
+        #endif
         do {
             try configureSession()
             try startEngine()
@@ -169,6 +190,22 @@ final class AudioPipeline {
             state = .failed(error.localizedDescription)
         }
     }
+
+    #if DEBUG
+    /// UI 測試：不開麥克風，以合成訊號驅動同一條偵測管線。伴奏不發聲。
+    private func startSynthetic(_ scenario: SyntheticScenario) {
+        let context = RealtimeCaptureContext(sampleRate: 48000)
+        let reference = TuningReference(clamping: Double(UserDefaults.standard.object(forKey: "referenceA4") as? Int ?? 442))
+        let source = SyntheticInputSource(scenario: scenario, reference: reference, context: context)
+        captureContext = context
+        syntheticSource = source
+        sampleRate = context.sampleRate
+        source.start()
+        displayLink.start()
+        state = .running
+        logger.info("合成輸入啟動：\(scenario.rawValue)")
+    }
+    #endif
 
     // MARK: - Session 與引擎
 
@@ -233,6 +270,10 @@ final class AudioPipeline {
     }
 
     private func tearDownEngine() {
+        #if DEBUG
+        syntheticSource?.stop()
+        syntheticSource = nil
+        #endif
         // engine.stop() 返回後 IO 回呼已結束，才能釋放回呼使用的物件
         engine?.stop()
         engine = nil

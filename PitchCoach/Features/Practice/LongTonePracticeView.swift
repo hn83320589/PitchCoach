@@ -113,6 +113,7 @@ private struct LongToneSetupView: View {
                 Button(action: start) {
                     Text("開始").frame(maxWidth: .infinity)
                 }
+                .accessibilityIdentifier("practice.start")
                 .buttonStyle(.borderedProminent)
                 .disabled(!isInRange || !canStart)
                 .listRowBackground(Color.clear)
@@ -173,8 +174,11 @@ struct LongToneResultView: View {
             }
             HStack(spacing: 12) {
                 StatTile(title: "±10¢ 以內", value: String(format: "%.0f%%", result.inToleranceRatio * 100), emphasized: true)
+                    .accessibilityIdentifier("longTone.accuracy")
                 StatTile(title: "平均偏差", value: formattedCents(result.meanCents))
+                    .accessibilityIdentifier("longTone.mean")
                 StatTile(title: "穩定度（標準差）", value: result.standardDeviationCents.map { String(format: "%.1f ¢", $0) } ?? "—")
+                    .accessibilityIdentifier("longTone.standardDeviation")
             }
             DeviationCurveChart(curve: result.curve)
                 .frame(height: 220)
@@ -202,5 +206,8 @@ struct StatTile: View {
         .frame(maxWidth: .infinity, minHeight: 72)
         .padding(.vertical, 8)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
     }
 }

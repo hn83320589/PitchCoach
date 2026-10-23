@@ -40,11 +40,16 @@ final class RealtimeCaptureContext: @unchecked Sendable {
         guard buffers.count > 0, let data = buffers[0].mData else { return }
 
         let samples = UnsafeBufferPointer(start: data.assumingMemoryBound(to: Float.self), count: Int(frameCount))
-        let startPosition = Int64(time.mSampleTime)
         let bufferHostTime = time.mFlags.contains(.hostTimeValid) ? AVAudioTime.seconds(forHostTime: time.mHostTime) : 0
+        process(samples, startingAt: Int64(time.mSampleTime), hostTime: bufferHostTime)
+    }
+
+    /// `hostTime` 為第一個樣本的 host time（秒，CACurrentMediaTime 時基）。
+    func process(_ samples: UnsafeBufferPointer<Float>, startingAt startPosition: Int64, hostTime bufferHostTime: Double) {
+        guard let base = samples.baseAddress, !samples.isEmpty else { return }
         let bufferStartSeconds = Double(startPosition) / sampleRate
         var rms: Float = 0
-        vDSP_rmsqv(samples.baseAddress!, 1, &rms, vDSP_Length(frameCount))
+        vDSP_rmsqv(base, 1, &rms, vDSP_Length(samples.count))
         let levelDB = 20 * log10(max(rms, 1e-9))
 
         analyzer.process(samples, startingAt: startPosition) { frame in

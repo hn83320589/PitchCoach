@@ -97,6 +97,7 @@ private struct ScaleSetupView: View {
                 Button(action: start) {
                     Text("開始").frame(maxWidth: .infinity)
                 }
+                .accessibilityIdentifier("practice.start")
                 .buttonStyle(.borderedProminent)
                 .disabled(!canStart || !octaves.contains(model.startOctave))
                 .listRowBackground(Color.clear)
@@ -202,7 +203,9 @@ struct ScaleResultView: View {
             }
             HStack(spacing: 12) {
                 StatTile(title: "到位", value: "\(result.reachedCount) / \(result.steps.count)", emphasized: true)
+                    .accessibilityIdentifier("scale.reached")
                 StatTile(title: "偏差最大", value: result.worstNotes.map { result.scale.displayName(of: $0.note) }.joined(separator: "、"))
+                    .accessibilityIdentifier("scale.worst")
             }
             VStack(spacing: 0) {
                 ForEach(Array(result.steps.enumerated()), id: \.offset) { index, step in
