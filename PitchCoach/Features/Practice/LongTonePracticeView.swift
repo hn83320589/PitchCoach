@@ -7,15 +7,11 @@ struct LongTonePracticeView: View {
     @Environment(AudioPipeline.self) private var pipeline
     @Environment(AppSettings.self) private var settings
     @Environment(\.modelContext) private var modelContext
-    @State private var model: LongTonePracticeModel?
+    @State private var model = LongTonePracticeModel()
     @State private var subscriptions: [UUID] = []
 
     var body: some View {
-        Group {
-            if let model {
-                content(model)
-            }
-        }
+        content(model)
         .navigationTitle("長音練習")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: subscribe)
@@ -45,10 +41,10 @@ struct LongTonePracticeView: View {
     }
 
     private func subscribe() {
-        let model = self.model ?? LongTonePracticeModel(save: { [modelContext] record in
+        model.save = { [modelContext] record in
             try PracticeRepository(container: modelContext.container).save(record)
-        })
-        self.model = model
+        }
+        let model = self.model
         subscriptions = [
             pipeline.addFrameHandler { frame in model.process(frame) },
             pipeline.addInterruptionHandler { reason in model.interrupt(reason) },
@@ -62,7 +58,7 @@ struct LongTonePracticeView: View {
         }
         subscriptions = []
         // 離開畫面視為放棄（不存檔）
-        if model?.phase == .running { model?.cancel() }
+        if model.phase == .running { model.cancel() }
     }
 }
 

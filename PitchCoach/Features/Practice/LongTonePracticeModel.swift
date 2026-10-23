@@ -25,11 +25,8 @@ final class LongTonePracticeModel {
     @ObservationIgnored private var lifecycle = PracticeLifecycle()
     @ObservationIgnored private var startedAt = Date()
     @ObservationIgnored private var reference = TuningReference.default
-    @ObservationIgnored private let save: @MainActor (PracticeSessionRecord) throws -> Void
-
-    init(save: @escaping @MainActor (PracticeSessionRecord) throws -> Void) {
-        self.save = save
-    }
+    /// 由畫面在出現時注入（需要 Environment 的 modelContext，init 時還拿不到）。
+    @ObservationIgnored var save: (@MainActor (PracticeSessionRecord) throws -> Void)?
 
     var duration: Duration { .seconds(10) }
 
@@ -79,6 +76,10 @@ final class LongTonePracticeModel {
         phase = .finished
         // 還沒開始發聲就被中斷：沒有可保留的資料
         guard result.analyzedDuration > .zero || result.statFrameCount > 0 else { return }
+        guard let save else {
+            saveError = "練習紀錄儲存失敗：尚未設定儲存位置。"
+            return
+        }
         do {
             try save(PracticeSessionRecord(longTone: result, startedAt: startedAt, reference: reference, interruption: interruption))
         } catch {

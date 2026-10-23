@@ -35,11 +35,8 @@ final class ScalePracticeModel {
     @ObservationIgnored private var firstFrameTime: Duration?
     @ObservationIgnored private var lastFrameTime: Duration?
     @ObservationIgnored private var reference = TuningReference.default
-    @ObservationIgnored private let save: @MainActor (PracticeSessionRecord) throws -> Void
-
-    init(save: @escaping @MainActor (PracticeSessionRecord) throws -> Void) {
-        self.save = save
-    }
+    /// 由畫面在出現時注入（需要 Environment 的 modelContext，init 時還拿不到）。
+    @ObservationIgnored var save: (@MainActor (PracticeSessionRecord) throws -> Void)?
 
     func availableOctaves(reference: TuningReference) -> [Int] {
         MajorScale.availableStartOctaves(key: key, reference: reference)
@@ -130,6 +127,10 @@ final class ScalePracticeModel {
         phase = .finished
         guard let firstFrameTime, let lastFrameTime else { return }   // 沒收到任何 frame：沒有可保留的資料
         let activeDuration = (lastFrameTime - firstFrameTime).seconds
+        guard let save else {
+            saveError = "練習紀錄儲存失敗：尚未設定儲存位置。"
+            return
+        }
         do {
             try save(PracticeSessionRecord(scale: result, startedAt: startedAt, activeDuration: activeDuration,
                                            reference: reference, interruption: interruption))
