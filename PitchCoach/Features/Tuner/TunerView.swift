@@ -168,6 +168,7 @@ private struct LatencyOverlay: View {
                         pipeline.hardwareInputLatency * 1000, pipeline.sampleRate ?? 0))
             Text(String(format: "輸入電平 %.1f dBFS　已接收 %d frames",
                         pipeline.inputLevelDB, pipeline.receivedFrameCount))
+            Text(pipeline.routeDescription)
         }
         .font(.caption.monospacedDigit())
         .foregroundStyle(.secondary)

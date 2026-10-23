@@ -54,6 +54,8 @@ final class AudioPipeline {
     /// 目前輸出路由的識別（埠類型＋UID），作為延遲校正值的索引。
     private(set) var routeKey = ""
     private(set) var routeName = ""
+    /// 開發用：目前的輸入與輸出埠（名稱與類型），確認收音一律使用內建麥克風。
+    private(set) var routeDescription = ""
     /// 歌唱模式提出：用喇叭外放時啟用回音消除（docs/SINGING_MODE.md §8）。
     var prefersVoiceProcessing = false {
         didSet {
@@ -201,6 +203,7 @@ final class AudioPipeline {
                 logger.error("回音消除在此路由無法穩定運作（引擎啟動後隨即停止），改用不消除的模式：\(self.routeKey)")
             }
         }
+        if case .routeChanged = event { refreshRouteDescription() }
         let commands = AudioInterruptionPolicy.commands(for: event, status: status, isSongPlaying: isSongPlaying)
         if !commands.isEmpty {
             logger.info("事件 \(String(describing: event)) → \(String(describing: commands))")
@@ -320,6 +323,16 @@ final class AudioPipeline {
         let output = session.currentRoute.outputs.first
         routeKey = output.map { "\($0.portType.rawValue):\($0.uid)" } ?? "none"
         routeName = output?.portName ?? ""
+        refreshRouteDescription()
+    }
+
+    private func refreshRouteDescription() {
+        let route = AVAudioSession.sharedInstance().currentRoute
+        func describe(_ ports: [AVAudioSessionPortDescription]) -> String {
+            let text = ports.map { "\($0.portName)（\($0.portType.rawValue)）" }.joined(separator: "、")
+            return text.isEmpty ? "無" : text
+        }
+        routeDescription = "輸入 \(describe(route.inputs))　輸出 \(describe(route.outputs))"
     }
 
     private func startEngine() throws {
