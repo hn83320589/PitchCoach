@@ -75,7 +75,7 @@ struct WeeklyReportPage: View {
                 tile("練習次數", "\(report.sessionCount) 次")
                 tile("中斷", "\(report.interruptedCount) 次")
             }
-            Text("總時數含自由練習（開著調音器演奏）\(formatPracticeDuration(report.freePracticeDuration))，以及長音、音階練習 \(formatPracticeDuration(report.totalDuration - report.freePracticeDuration))。")
+            Text("總時數含自由練習（開著調音器演奏）\(formatPracticeDuration(report.freePracticeDuration))，以及長音、音階、歌唱練習 \(formatPracticeDuration(report.totalDuration - report.freePracticeDuration))。")
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
         }

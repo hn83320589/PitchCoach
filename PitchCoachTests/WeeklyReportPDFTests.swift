@@ -49,7 +49,9 @@ struct WeeklyReportPDFTests {
                                               generatedAt: date(23, 20), calendar: calendar)
         let text = try extractText(data)
         for expected in ["練習週報", "王小明", "練習天數", "3 天", "總時數", "55 分", "長音", "80%", "音階",
-                         "最常偏高", "F#4", "+10.0", "最常偏低", "A#4", "-8.0", "A4 = 442 Hz"] {
+                         "最常偏高", "F#4", "+10.0", "最常偏低", "A#4", "-8.0", "A4 = 442 Hz",
+                         // 總時數扣掉自由練習後也包含歌唱，說明文字不能只寫長音、音階
+                         "長音、音階、歌唱練習"] {
             #expect(text.contains(expected), "PDF 文字中找不到「\(expected)」")
         }
     }
