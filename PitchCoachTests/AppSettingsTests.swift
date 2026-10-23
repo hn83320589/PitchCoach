@@ -27,4 +27,13 @@ struct AppSettingsTests {
         #expect(settings.referenceA4 == 466)
         #expect(AppSettings(defaults: defaults).referenceA4 == 466)
     }
+
+    @Test func studentNameIsPersistedAndTrimmedForDisplay() {
+        let defaults = makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.studentName.isEmpty)
+        settings.studentName = "  王小明 "
+        #expect(AppSettings(defaults: defaults).studentName == "  王小明 ")
+        #expect(settings.displayStudentName == "王小明")
+    }
 }

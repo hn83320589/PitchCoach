@@ -6,15 +6,17 @@ import XCTest
 /// - `-uiTesting`：SwiftData 使用記憶體內儲存
 /// - `-syntheticScenario <tuner|longTone|scale>`：以合成訊號取代麥克風
 /// - `-referenceA4 442`、`-showsLatencyOverlay NO`：固定設定（UserDefaults 參數網域）
+/// - `-seedDemoData`：在記憶體內儲存放入 28 天示範紀錄（以真正的判定器產生）
 @MainActor
 final class PitchCoachUITests: XCTestCase {
     override func setUp() async throws {
         continueAfterFailure = false
     }
 
-    private func launch(_ scenario: String) -> XCUIApplication {
+    private func launch(_ scenario: String, extraArguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTesting", "-syntheticScenario", scenario, "-referenceA4", "442", "-showsLatencyOverlay", "NO"]
+            + extraArguments
         app.launch()
         return app
     }
@@ -104,5 +106,24 @@ final class PitchCoachUITests: XCTestCase {
         let resumed = NSPredicate(format: "value != %@", "—")
         XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: resumed, object: element(app, "tuner.frequency"))],
                                         timeout: 5), .completed, "回到前景後應恢復偵測")
+    }
+
+    func testHistoryShowsTrendsAndGeneratesWeeklyReport() {
+        let app = launch("tuner", extraArguments: ["-seedDemoData", "-studentName", "王小明"])
+        app.buttons["紀錄"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["每日練習分鐘數"].waitForExistence(timeout: 5), "應顯示趨勢圖")
+        attachScreenshot("07-trends")
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["各音平均偏差"].waitForExistence(timeout: 3))
+        attachScreenshot("08-trends-notes")
+
+        app.buttons["history.report"].tap()
+        app.buttons["report.generate"].tap()
+        XCTAssertTrue(app.buttons["report.share"].waitForExistence(timeout: 5), "產生後應可分享")
+        attachScreenshot("09-weekly-report")
+
+        app.buttons["report.share"].tap()
+        sleep(2)
+        attachScreenshot("10-share-sheet")
     }
 }

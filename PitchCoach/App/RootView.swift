@@ -10,6 +10,8 @@ struct RootView: View {
                 .tabItem { Label("調音器", systemImage: "tuningfork") }
             PracticeHomeView()
                 .tabItem { Label("練習", systemImage: "music.note.list") }
+            HistoryView()
+                .tabItem { Label("紀錄", systemImage: "chart.bar.xaxis") }
             SettingsView()
                 .tabItem { Label("設定", systemImage: "gearshape") }
         }

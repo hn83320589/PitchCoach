@@ -24,6 +24,15 @@ struct SettingsView: View {
                     Text("所有音名與偏差都以此為準。可設定 415–466 Hz，請依老師指定的基準音設定。")
                 }
 
+                Section {
+                    TextField("學生姓名（選填）", text: $settings.studentName)
+                        .textContentType(.name)
+                } header: {
+                    Text("週報")
+                } footer: {
+                    Text("姓名會顯示在給老師的 PDF 週報上。")
+                }
+
                 Section("開發") {
                     Toggle("顯示延遲資訊", isOn: $settings.showsLatencyOverlay)
                 }

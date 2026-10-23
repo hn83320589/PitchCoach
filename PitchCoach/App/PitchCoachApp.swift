@@ -11,8 +11,14 @@ struct PitchCoachApp: App {
     private static func makeModelContainer() -> ModelContainer {
         let inMemory = ProcessInfo.processInfo.arguments.contains("-uiTesting")
         do {
-            return try ModelContainer(for: PracticeSessionRecord.self, NoteStatRecord.self,
-                                      configurations: ModelConfiguration(isStoredInMemoryOnly: inMemory))
+            let container = try ModelContainer(for: PracticeSessionRecord.self, NoteStatRecord.self,
+                                               configurations: ModelConfiguration(isStoredInMemoryOnly: inMemory))
+            #if DEBUG
+            if inMemory, ProcessInfo.processInfo.arguments.contains("-seedDemoData") {
+                try DemoDataSeeder.seed(into: container.mainContext)
+            }
+            #endif
+            return container
         } catch {
             // 沒有資料庫就無法保存練習紀錄，直接終止並附上原因，比靜默失去資料好
             fatalError("無法建立練習紀錄資料庫：\(error)")

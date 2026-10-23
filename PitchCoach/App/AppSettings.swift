@@ -9,6 +9,7 @@ final class AppSettings {
     private enum Key {
         static let referenceA4 = "referenceA4"
         static let showsLatencyOverlay = "showsLatencyOverlay"
+        static let studentName = "studentName"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -30,6 +31,15 @@ final class AppSettings {
         didSet { defaults.set(showsLatencyOverlay, forKey: Key.showsLatencyOverlay) }
     }
 
+    /// 顯示在 PDF 週報標題，選填。
+    var studentName: String {
+        didSet { defaults.set(studentName, forKey: Key.studentName) }
+    }
+
+    var displayStudentName: String {
+        studentName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var reference: TuningReference {
         TuningReference(clamping: Double(referenceA4))
     }
@@ -39,5 +49,6 @@ final class AppSettings {
         let stored = defaults.object(forKey: Key.referenceA4) as? Int
         referenceA4 = Int(TuningReference(clamping: Double(stored ?? Int(TuningReference.default.a4))).a4)
         showsLatencyOverlay = defaults.bool(forKey: Key.showsLatencyOverlay)
+        studentName = defaults.string(forKey: Key.studentName) ?? ""
     }
 }
