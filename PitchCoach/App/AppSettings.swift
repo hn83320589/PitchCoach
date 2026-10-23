@@ -10,6 +10,7 @@ final class AppSettings {
         static let referenceA4 = "referenceA4"
         static let showsLatencyOverlay = "showsLatencyOverlay"
         static let studentName = "studentName"
+        static let latencyCalibrations = "latencyCalibrations"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -40,6 +41,19 @@ final class AppSettings {
         studentName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// 歌唱模式的延遲校正值（秒），依輸出路由（埠類型＋UID）分別儲存。
+    private(set) var latencyCalibrations: [String: Double] {
+        didSet { defaults.set(latencyCalibrations, forKey: Key.latencyCalibrations) }
+    }
+
+    func latencyCalibration(for routeKey: String) -> Double? {
+        latencyCalibrations[routeKey]
+    }
+
+    func setLatencyCalibration(_ offset: Double, for routeKey: String) {
+        latencyCalibrations[routeKey] = offset
+    }
+
     var reference: TuningReference {
         TuningReference(clamping: Double(referenceA4))
     }
@@ -50,5 +64,6 @@ final class AppSettings {
         referenceA4 = Int(TuningReference(clamping: Double(stored ?? Int(TuningReference.default.a4))).a4)
         showsLatencyOverlay = defaults.bool(forKey: Key.showsLatencyOverlay)
         studentName = defaults.string(forKey: Key.studentName) ?? ""
+        latencyCalibrations = defaults.dictionary(forKey: Key.latencyCalibrations) as? [String: Double] ?? [:]
     }
 }

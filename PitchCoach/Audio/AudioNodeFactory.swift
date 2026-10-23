@@ -14,4 +14,16 @@ enum AudioNodeFactory {
             return noErr
         }
     }
+
+    /// 回呼會收到 buffer 第一個樣本的 host time（秒），供 SongPlayer 回報歌曲起點被播放的時間。
+    static func timedSourceNode(format: AVAudioFormat, renderer: any TimedRealtimeRenderer) -> AVAudioSourceNode {
+        AVAudioSourceNode(format: format) { _, timestamp, frameCount, audioBufferList in
+            let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+            guard buffers.count > 0, let data = buffers[0].mData else { return noErr }
+            let time = timestamp.pointee
+            let hostTime = time.mFlags.contains(.hostTimeValid) ? AVAudioTime.seconds(forHostTime: time.mHostTime) : 0
+            renderer.render(into: data.assumingMemoryBound(to: Float.self), frameCount: Int(frameCount), hostTime: hostTime)
+            return noErr
+        }
+    }
 }

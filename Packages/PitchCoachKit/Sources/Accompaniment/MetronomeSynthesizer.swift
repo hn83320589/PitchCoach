@@ -32,30 +32,14 @@ public final class MetronomeSynthesizer: @unchecked Sendable {
     public let settings = RealtimeParameter(MetronomeSettings())
 
     private let sampleRate: Double
-    private let click: UnsafeMutablePointer<Float>
-    private let clickLength: Int
+    private let click: ClickSound
     private var wasEnabled = false
     private var samplesSinceBeat = 0.0
     private var clickPosition = Int.max
 
     public init(sampleRate: Double) {
         self.sampleRate = sampleRate
-        clickLength = Int(sampleRate * 0.015)
-        click = .allocate(capacity: clickLength)
-        // 固定種子的 xorshift 噪音 × 指數衰減（時間常數 3 ms）
-        var state: UInt32 = 0x9E37_79B9
-        for i in 0..<clickLength {
-            state ^= state << 13
-            state ^= state >> 17
-            state ^= state << 5
-            let noise = Float(state) / Float(UInt32.max) * 2 - 1
-            let envelope = Float(exp(-Double(i) / (sampleRate * 0.003)))
-            click[i] = (noise == 0 ? 0.5 : noise) * envelope
-        }
-    }
-
-    deinit {
-        click.deallocate()
+        click = ClickSound(sampleRate: sampleRate)
     }
 
     public func render(into output: UnsafeMutablePointer<Float>, frameCount: Int) {
@@ -76,8 +60,8 @@ public final class MetronomeSynthesizer: @unchecked Sendable {
                 samplesSinceBeat -= samplesPerBeat
                 clickPosition = 0
             }
-            if clickPosition < clickLength {
-                output[i] = click[clickPosition] * current.volume
+            if clickPosition < click.length {
+                output[i] = click.samples[clickPosition] * current.volume
                 clickPosition += 1
             } else {
                 output[i] = 0

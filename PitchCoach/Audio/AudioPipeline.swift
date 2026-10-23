@@ -48,6 +48,22 @@ final class AudioPipeline {
     private(set) var receivedFrameCount = 0
     /// 伴奏目前從內建喇叭播放（麥克風會收到伴奏，建議戴耳機）。
     private(set) var isOutputBuiltInSpeaker = false
+    /// iOS 回報的輸入／輸出延遲（秒），歌唱模式的時間對齊使用。
+    private(set) var inputLatency: Double = 0
+    private(set) var outputLatency: Double = 0
+    /// 目前輸出路由的識別（埠類型＋UID），作為延遲校正值的索引。
+    private(set) var routeKey = ""
+    private(set) var routeName = ""
+    /// 歌唱模式提出：用喇叭外放時啟用回音消除（docs/SINGING_MODE.md §8）。
+    var prefersVoiceProcessing = false {
+        didSet {
+            if prefersVoiceProcessing != oldValue, state == .running { scheduleRestart() }
+        }
+    }
+    private(set) var isVoiceProcessingActive = false
+    var songPlayerSettings = SongPlayerSettings() {
+        didSet { songPlayer?.settings.set(songPlayerSettings) }
+    }
 
     var drone = DroneSettings() {
         didSet { droneSynthesizer?.settings.set(drone) }
@@ -60,6 +76,8 @@ final class AudioPipeline {
     @ObservationIgnored private var captureContext: RealtimeCaptureContext?
     @ObservationIgnored private var droneSynthesizer: DroneSynthesizer?
     @ObservationIgnored private var metronomeSynthesizer: MetronomeSynthesizer?
+    @ObservationIgnored private var songPlayer: SongPlayer?
+    @ObservationIgnored private var songEventHandlers: [UUID: @MainActor (SongPlayer.Report) -> Void] = [:]
     @ObservationIgnored private var frameHandlers: [UUID: @MainActor (PitchFrame) -> Void] = [:]
     @ObservationIgnored private var interruptionHandlers: [UUID: @MainActor (PracticeInterruptionReason) -> Void] = [:]
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
@@ -96,6 +114,25 @@ final class AudioPipeline {
 
     func removeInterruptionHandler(_ id: UUID) {
         interruptionHandlers[id] = nil
+    }
+
+    /// 歌唱模式：歌曲起點被播放、歌曲結束時通知。
+    func addSongEventHandler(_ handler: @escaping @MainActor (SongPlayer.Report) -> Void) -> UUID {
+        let id = UUID()
+        songEventHandlers[id] = handler
+        return id
+    }
+
+    func removeSongEventHandler(_ id: UUID) {
+        songEventHandlers[id] = nil
+    }
+
+    func playSong(_ score: SongPlayerScore) {
+        songPlayer?.play(score)
+    }
+
+    func stopSong() {
+        songPlayer?.stop()
     }
 
     // MARK: - 啟動與停止
@@ -228,12 +265,29 @@ final class AudioPipeline {
             try session.setPreferredInput(builtInMic)
         }
         hardwareInputLatency = session.inputLatency + session.ioBufferDuration
+        inputLatency = session.inputLatency
+        outputLatency = session.outputLatency
         isOutputBuiltInSpeaker = session.currentRoute.outputs.contains { $0.portType == .builtInSpeaker }
+        let output = session.currentRoute.outputs.first
+        routeKey = output.map { "\($0.portType.rawValue):\($0.uid)" } ?? "none"
+        routeName = output?.portName ?? ""
     }
 
     private func startEngine() throws {
         let engine = AVAudioEngine()
         let input = engine.inputNode
+        // 回音消除必須在讀取格式、啟動引擎之前設定（會改變輸入格式）
+        isVoiceProcessingActive = false
+        if prefersVoiceProcessing && isOutputBuiltInSpeaker {
+            do {
+                try input.setVoiceProcessingEnabled(true)
+                input.isVoiceProcessingAGCEnabled = false
+                isVoiceProcessingActive = true
+            } catch {
+                // 退回不消除的模式（方案 B：快速衰減的提示音＋建議戴耳機），不讓收音整個失敗
+                logger.error("無法啟用回音消除：\(error.localizedDescription)")
+            }
+        }
         let inputFormat = input.outputFormat(forBus: 0)
         guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0,
               let monoInput = Self.monoFormat(sampleRate: inputFormat.sampleRate) else {
@@ -249,14 +303,19 @@ final class AudioPipeline {
         let synthRate = outputRate > 0 ? outputRate : inputFormat.sampleRate
         let droneSynth = DroneSynthesizer(sampleRate: synthRate)
         let metronomeSynth = MetronomeSynthesizer(sampleRate: synthRate)
+        let player = SongPlayer(sampleRate: synthRate)
         droneSynth.settings.set(drone)
         metronomeSynth.settings.set(metronome)
+        player.settings.set(songPlayerSettings)
         if let monoOutput = Self.monoFormat(sampleRate: synthRate) {
             for renderer in [droneSynth, metronomeSynth] as [any RealtimeRenderer] {
                 let source = AudioNodeFactory.sourceNode(format: monoOutput, renderer: renderer)
                 engine.attach(source)
                 engine.connect(source, to: engine.mainMixerNode, format: monoOutput)
             }
+            let songSource = AudioNodeFactory.timedSourceNode(format: monoOutput, renderer: player)
+            engine.attach(songSource)
+            engine.connect(songSource, to: engine.mainMixerNode, format: monoOutput)
         }
 
         engine.prepare()
@@ -266,6 +325,7 @@ final class AudioPipeline {
         captureContext = context
         droneSynthesizer = droneSynth
         metronomeSynthesizer = metronomeSynth
+        songPlayer = player
         sampleRate = inputFormat.sampleRate
     }
 
@@ -280,6 +340,7 @@ final class AudioPipeline {
         captureContext = nil
         droneSynthesizer = nil
         metronomeSynthesizer = nil
+        songPlayer = nil
     }
 
     private static func monoFormat(sampleRate: Double) -> AVAudioFormat? {
@@ -317,5 +378,8 @@ final class AudioPipeline {
             }
         }
         if let latestLevel { inputLevelDB = latestLevel }
+        songPlayer?.reports.drain { report in
+            for handler in songEventHandlers.values { handler(report) }
+        }
     }
 }
