@@ -15,7 +15,9 @@ struct TunerView: View {
                 case .permissionDenied:
                     MicrophonePermissionView()
                 case .failed(let message):
-                    AudioErrorView(message: message) { Task { await pipeline.start() } }
+                    AudioErrorView(message: message) { pipeline.resume() }
+                case .suspended:
+                    AudioSuspendedView { pipeline.resume() }
                 case .idle, .running:
                     tuner
                 }
@@ -50,6 +52,7 @@ struct TunerView: View {
                 .padding(.horizontal, 16)
             ReadoutRow(reading: reading)
             Spacer()
+            AccompanimentPanel(defaultDroneNote: .a)
             if settings.showsLatencyOverlay {
                 LatencyOverlay()
             }
@@ -109,7 +112,7 @@ struct ReadoutRow: View {
     }
 
     /// 四捨五入後為 0 時顯示「0 ¢」，避免出現「−0 ¢」讓學生誤以為偏低。
-    static func formatCents(_ cents: Double) -> String {
+    nonisolated static func formatCents(_ cents: Double) -> String {
         let rounded = Int(cents.rounded())
         return rounded == 0 ? "0 ¢" : String(format: "%+d ¢", rounded)
     }

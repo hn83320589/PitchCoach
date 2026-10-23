@@ -33,3 +33,18 @@ struct AudioErrorView: View {
         }
     }
 }
+
+struct AudioSuspendedView: View {
+    let resume: () -> Void
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("收音已暫停", systemImage: "pause.circle")
+        } description: {
+            Text("收音被來電或其他 App 中斷。")
+        } actions: {
+            Button("恢復收音", action: resume)
+                .buttonStyle(.borderedProminent)
+        }
+    }
+}

@@ -10,6 +10,7 @@
 		4C000000000000000000001F /* MusicTheory in Frameworks */ = {isa = PBXBuildFile; productRef = 4C000000000000000000001C /* MusicTheory */; };
 		4C0000000000000000000020 /* PitchDetection in Frameworks */ = {isa = PBXBuildFile; productRef = 4C000000000000000000001D /* PitchDetection */; };
 		4C0000000000000000000021 /* PracticeEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 4C000000000000000000001E /* PracticeEngine */; };
+		4C0000000000000000000022 /* Accompaniment in Frameworks */ = {isa = PBXBuildFile; productRef = 4C0000000000000000000023 /* Accompaniment */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -48,6 +49,7 @@
 				4C000000000000000000001F /* MusicTheory in Frameworks */,
 				4C0000000000000000000020 /* PitchDetection in Frameworks */,
 				4C0000000000000000000021 /* PracticeEngine in Frameworks */,
+				4C0000000000000000000022 /* Accompaniment in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -102,6 +104,7 @@
 				4C000000000000000000001C /* MusicTheory */,
 				4C000000000000000000001D /* PitchDetection */,
 				4C000000000000000000001E /* PracticeEngine */,
+				4C0000000000000000000023 /* Accompaniment */,
 			);
 			productName = PitchCoach;
 			productReference = 4C0000000000000000000004 /* PitchCoach.app */;
@@ -417,6 +420,10 @@
 		4C000000000000000000001E /* PracticeEngine */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = PracticeEngine;
+		};
+		4C0000000000000000000023 /* Accompaniment */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Accompaniment;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

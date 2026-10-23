@@ -111,6 +111,7 @@ flowchart TB
 - `PitchDetection`：只依賴 `Accelerate`。
 - `PracticeEngine`：依賴 `MusicTheory`、`PitchDetection`（只用到 `PitchFrame` 型別）。
 - `SignalKit`：只供測試（以及 App 的 Debug 自我測試畫面，選用）。
+- `Accompaniment`（M5 新增）：drone 與節拍器合成器、`RealtimeParameter`。原設計放在 App 層，因合成邏輯（樣本精準的拍點、淡入淡出）值得在 macOS 上測試而移入 Package；無相依。
 - App 只透過 Package 的 public API 使用核心邏輯；**所有「判定」與「統計」都在 Package 內**，App 只負責 I/O（音訊、儲存、畫面、PDF）。
 
 > 這個切分讓 AC-09、AC-10、AC-12、AC-13 的「數字正確性」都能在 macOS 上用 `swift test` 驗證，不需要模擬器。
