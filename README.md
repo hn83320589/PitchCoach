@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/hn83320589/PitchCoach/actions/workflows/ci.yml/badge.svg)](https://github.com/hn83320589/PitchCoach/actions/workflows/ci.yml)
 
-給兒童小提琴與長笛學生的 iPhone 音準練習 App：即時調音器、長音與音階練習、練習紀錄與趨勢，並能產生 PDF 週報分享給老師。
+給兒童小提琴與長笛學生的 iPhone 音準練習 App：即時調音器、長音與音階練習、跟著伴奏唱歌的歌唱模式、練習紀錄與趨勢，並能產生 PDF 週報分享給老師。
 
 - **平台**：iOS 17 以上、iPhone 直向
 - **技術**：SwiftUI、AVAudioEngine、AVAudioSession、SwiftData、Swift Charts、Accelerate/vDSP
@@ -12,6 +12,10 @@
 | 調音器 | 長音結果 | 音階結果 | 近 30 天趨勢 | PDF 週報 |
 |---|---|---|---|---|
 | ![調音器](docs/screenshots/01-tuner.png) | ![長音結果](docs/screenshots/03-long-tone-result.png) | ![音階結果](docs/screenshots/05-scale-result.png) | ![趨勢](docs/screenshots/07-trends.png) | ![PDF 週報](docs/screenshots/11-weekly-report-pdf.png) |
+
+| 歌唱設定 | 歌唱中（KTV 音高條） | 歌唱結果 |
+|---|---|---|
+| ![歌唱設定](docs/screenshots/12-singing-setup.png) | ![KTV 音高條](docs/screenshots/13-singing-karaoke.png) | ![歌唱結果](docs/screenshots/14-singing-result.png) |
 
 > 截圖由 UI 測試以合成訊號自動產生（`scripts/export-screenshots.sh`），PDF 為示範資料實際輸出的頁面。實機截圖見[實機驗收](#實機驗收)。
 
@@ -26,9 +30,10 @@
 5. [測試訊號與精度量測](#測試訊號與精度量測)
 6. [延遲量測](#延遲量測)
 7. [練習判定規則](#練習判定規則)
-8. [測試](#測試)
-9. [實機驗收](#實機驗收)
-10. [已知限制](#已知限制)
+8. [歌唱模式](#歌唱模式)
+9. [測試](#測試)
+10. [實機驗收](#實機驗收)
+11. [已知限制](#已知限制)
 
 ---
 
@@ -80,9 +85,11 @@ PitchCoach/
 │   ├── Sources/MusicTheory/         # 基準音、音名、cents、大調音階
 │   ├── Sources/PitchDetection/      # MPM、諧波精修、串流切窗、即時信箱
 │   ├── Sources/PracticeEngine/      # 調音器平滑、長音／音階／自由練習判定、生命週期、統計
-│   ├── Sources/Accompaniment/       # drone 與節拍器合成器
-│   └── Sources/SignalKit/           # 測試訊號產生（固定種子）
+│   ├── Sources/SingingEngine/       # 旋律格式、內建旋律、時間軸、顫音、歌唱判定、起音、延遲校正
+│   ├── Sources/Accompaniment/       # drone、節拍器與歌唱伴奏（SongPlayer）合成器
+│   └── Sources/SignalKit/           # 測試訊號產生（固定種子）、人聲模擬（共振峰＋顫音）
 ├── docs/ARCHITECTURE.md             # 系統分析與架構設計（含所有設計決策）
+├── docs/SINGING_MODE.md             # 歌唱模式的系統分析與架構設計
 ├── docs/DEVICE_TESTING.md           # 實機驗收步驟
 └── scripts/                         # 截圖匯出、測試音產生
 ```
@@ -107,6 +114,9 @@ flowchart LR
 
     DRONE["Drone 合成<br/>AVAudioSourceNode"] --> MIX["mainMixerNode"]
     METRO["節拍器合成<br/>AVAudioSourceNode"] --> MIX
+    SONG["SongPlayer 歌唱伴奏<br/>回報歌曲起點的 host time"] --> MIX
+    SONG -.歌曲起點.-> CLOCK["SongClock<br/>換算學生聽到的歌曲時間"]
+    MB -.frame host time.-> CLOCK --> SING["歌唱判定<br/>顫音、音準、起音"]
     MIX --> OUT["喇叭／有線耳機／藍牙 A2DP"]
 
     SYS["AVAudioSession 通知<br/>來電、路由、媒體重置、背景"] --> POL["AudioInterruptionPolicy"]
@@ -162,6 +172,108 @@ flowchart LR
 2. **選「第一個」而非「最高」**：週期訊號在 2T、3T 的 n 值和 T 幾乎一樣，只取最高峰會隨機落在倍數週期（八度偏低）。
 3. **精修只在粗估附近搜尋**：搜尋範圍限制在主瓣內，不會跳到 ω/2 或 2ω。
 4. **調音器顯示層**：3 frame 中位數濾波去除單一 frame 的跳動。
+
+
+---
+
+## 歌唱模式
+
+設計與決策見 [docs/SINGING_MODE.md](docs/SINGING_MODE.md)。練習分頁 →「歌唱練習」。
+
+### 判定規則
+
+**每個音符的音高**
+1. 取該音符樂譜期間的 frame（時間已換算成學生聽到的歌曲時間，見下方「時間對齊」）。
+2. 去掉頭尾各 15%，只用中間 70%。前 20% 從 −100¢ 滑上來的滑音，被去掉了大半，剩下的只占中段約 7%，不影響中位數。
+3. 中段做顫音偵測：偵測到顫音時取擬合出的**中心音高**，否則取**中位數**。
+4. |偏差| ≤ 25¢ 為「準」，否則依方向標示「偏高」或「偏低」；整個音符都沒有音高為「沒唱」。中段有效 frame 少於 3 個時改用整個音符期間。
+
+**顫音偵測**：對中段的 cents 序列擬合 c(τ) ≈ α + βτ + a·cos(2πfτ) + b·sin(2πfτ)，在 3–9 Hz 搜尋殘差最小的 f。
+- 判定為顫音的條件：擬合解釋 ≥ 50% 的變異、幅度 ≥ 15¢、中段涵蓋 ≥ 1.5 個週期。
+- 中心音高取 α，不用中位數：顫音只涵蓋非整數個週期時，中位數會偏向多出來的半個週期。
+- 偵測器的分析窗（43 ms）會平均掉部分顫音，幅度以該窗的振幅響應補償（由窗形推導，5.5 Hz 約 0.95）。
+
+**容許八度**：開啟時每個 frame 先換算到離目標最近的八度（±1 個八度）再判定；關閉時整首唱低八度會得到約 −1200¢，判定為偏低。
+
+**節奏判定**：在樂譜起點 ±min(250 ms, 半個音符間隔) 內找起音，依可靠度取用三種線索。
+1. 換氣後發聲：無音高 ≥ 40 ms 後出現音高。
+2. 音高穿越前後目標音的中點：連唱換音時，分析窗橫跨兩音，常有 1–3 個無音高的 frame，因此容許 ≤ 80 ms 的空檔並內插。
+3. 電平上升 ≥ 6 dB：同音重複時重新咬字，取上升過中點的時間。
+
+起音差 ≤ ±80 ms 為「準時」，否則為「提早」或「延遲」。時間一律以分析窗**中心**計，用窗尾會讓起音晚約 21 ms。
+
+**結果**：音準與節奏正確率都以全部音符為分母（沒唱算不準、不準時）。「最常唱不準的音高區段」是在 5 個半音寬的滑動區段中，找不準比例最高、至少 3 個音者。結果存入紀錄，並納入趨勢圖（歌唱正確率）與 PDF 週報（歌唱區塊）。
+
+### 自訂旋律格式
+
+```
+C4:1 D4:1 E4:2 R:1 F#4:0.5 Bb4:1.5
+```
+
+- 以空白或換行分隔，每個音符為 `音名[升降]八度:拍數`。
+- 音名 A–G（大小寫皆可），升降記號 `#`、`b`、`♯`、`♭`，八度為整數，拍數為大於 0、不超過 16 的數字（可有小數）。
+- `R:拍數` 為休止符。
+- 可用範圍 C2–C7；移調（±6 個半音）後必須仍在偵測範圍內。
+- 速度（BPM，40–208）在畫面上設定。
+- 格式錯誤時會指出第幾個音符與原因，例如：`第 3 個音符「H4:1」：無法辨識的音名「H」（請用 A–G，或 R 表示休止符）`。
+
+### 伴奏與收音的時間對齊
+
+伴奏（輸出）與收音（輸入）以 **mach host time** 為共同時鐘：
+
+| 事件 | 計算 |
+|---|---|
+| 歌曲起點被播放 | SongPlayer 在預備拍結束的那個樣本，回報該 buffer 的 `AudioTimeStamp.mHostTime` ＋ 樣本偏移 |
+| 學生聽到歌曲起點 | 上述時間 ＋ `AVAudioSession.outputLatency`（喇叭約 10 ms、藍牙 A2DP 約 150–250 ms） |
+| 一個 frame 的聲音到達麥克風 | 分析窗中心的 host time − `AVAudioSession.inputLatency` |
+| 該 frame 的歌曲時間 | 到達麥克風 − 聽到歌曲起點 − 依路由的校正值 |
+
+學生跟著**聽到的**伴奏唱就會判定為準時，不論用喇叭還是藍牙耳機。
+
+**延遲校正**：iOS 回報的藍牙延遲是估計值。歌唱設定 →「延遲校正」會以目前的路由播放 8 個 A4 提示音，由麥克風收音（用耳機時把耳機貼近麥克風），取起音偏移的中位數作為該路由的校正值，依裝置分別儲存。
+
+**喇叭外放**：喇叭播放伴奏時啟用 Apple 的 voice processing 回音消除（關閉 AGC），避免偵測器聽到的是提示音而非學生的聲音；提示音是快速衰減的鋼琴式音色。啟用失敗時記錄錯誤並退回不消除的模式。
+
+### 內建旋律（皆為公有領域）
+
+只使用旋律，不含歌詞（中文歌詞的翻譯可能仍有著作權）。
+
+| 曲名 | 原曲 | 年代 | 來源 |
+|---|---|---|---|
+| 小星星 | Ah! vous dirai-je, maman（法國民謠） | 1761 年已有出版紀錄 | [Wikipedia](https://en.wikipedia.org/wiki/Ah!_vous_dirai-je,_maman) |
+| 兩隻老虎 | Frère Jacques（法國民謠） | 18 世紀 | [Wikipedia](https://en.wikipedia.org/wiki/Fr%C3%A8re_Jacques) |
+| 小蜜蜂 | Hänschen klein（德國民謠） | 19 世紀 | [Wikipedia](https://en.wikipedia.org/wiki/H%C3%A4nschen_klein) |
+| 瑪莉有隻小綿羊 | Mary Had a Little Lamb（旋律 Lowell Mason） | 1830 年代 | [Wikipedia](https://en.wikipedia.org/wiki/Mary_Had_a_Little_Lamb) |
+| 倫敦鐵橋 | London Bridge Is Falling Down（英國傳統童謠） | 17 世紀以前 | [Wikipedia](https://en.wikipedia.org/wiki/London_Bridge_Is_Falling_Down) |
+| 歡樂頌 | 貝多芬第九號交響曲第四樂章主題 | 1824 年 | [Wikipedia](https://en.wikipedia.org/wiki/Ode_to_Joy) |
+
+### 量測結果
+
+測試訊號由 `VoiceSynthesizer` 產生：1/h 遞減的泛音經母音共振峰（/a/ /i/ /u/，男、女、童聲）塑形，可加顫音、滑音與音量包絡，並走完整條處理鏈（合成 → 串流偵測 → 歌曲時鐘 → 判定）。
+
+**AC-15**：人聲模擬加上 5.5 Hz ±60¢ 的顫音。
+
+| 訊號 | 中心音高誤差 | 顫音速度 | 顫音幅度 | 門檻 |
+|---|---|---|---|---|
+| 男聲 /a/ E3 | +0.02¢ | 5.500 Hz | 60.08¢ | 中心 < 5¢、速度 < 0.5 Hz、幅度 < 10¢ |
+| 女聲 /i/ A4 | +0.05¢ | 5.500 Hz | 60.04¢ | |
+| 童聲 /u/ E5 | +0.05¢ | 5.500 Hz | 60.03¢ | |
+
+**AC-18**：〈小星星〉開頭 7 個音，每個音的實際起音時間已知，涵蓋換氣、同音重複與連唱換音。
+
+| 音符 | 情況 | 實際起音差 | 偵測 | 誤差 |
+|---|---|---|---|---|
+| 1 C4 | 從靜音起音 | 0 ms | +1.3 ms | +1.3 ms |
+| 2 C4 | 同音重複（電平上升） | +50 ms | +43.0 ms | −7.0 ms |
+| 3 G4 | 換氣後起音 | −40 ms | −46.7 ms | −6.7 ms |
+| 4 G4 | 同音重複 | +120 ms | +117.0 ms | −3.0 ms |
+| 5 A4 | 連唱換音（音高穿越） | 0 ms | −3.7 ms | −3.7 ms |
+| 6 A4 | 同音重複 | −90 ms | −95.2 ms | −5.2 ms |
+| 7 G4 | 連唱換音 | +30 ms | +32.9 ms | +2.9 ms |
+
+最大誤差 7.0 ms，門檻 30 ms。另外，共振峰的風險也一併驗證過：3 種聲音 × 3 個母音 × 各自音域的每個半音，共 171 組，皆無八度錯誤、誤差 < 1¢。偵測器不需修改。
+
+**AC-19（實機）**：見 [docs/DEVICE_TESTING.md](docs/DEVICE_TESTING.md)。以「延遲校正」畫面讓伴奏本身當「完美的範唱」，分別用內建喇叭與藍牙耳機（貼近麥克風）量每個提示音的起音偏移；再由真人跟同一首歌各唱 3 次。結果：**待實機量測**。
 
 ---
 
@@ -232,17 +344,18 @@ flowchart LR
 
 ## 測試
 
-共 **130 個測試**，全數通過。
+共 **182 個測試**，全數通過（題目要求 ≥ 55）。
 
 | 套件 | 數量 | 重點 |
 |---|---|---|
 | `MusicTheoryTests` | 18 | A4 = 442／440 驗收案例、[-50, 50) 歸屬、12 調拼寫、起始八度範圍 |
-| `SignalKitTests` | 4 | 種子決定性、SNR 混合精度 |
-| `PitchDetectionTests` | 21 | 純正弦、二次泛音、SNR 20 dB、靜音與噪音、500 組性質測試、鋸齒波、串流切窗、即時信箱 |
-| `AccompanimentTests` | 9 | 節拍器拍點精準不漂移、click 不被當成音高、drone 頻率與淡入淡出 |
-| `PracticeEngineTests` | 47 | 調音器平滑、長音手算 fixture、到位 299／300 ms 與 ±15 抖動邊界、生命週期、自由練習、趨勢與週報 |
-| `PitchCoachTests`（App） | 25 | 中斷策略與通知轉換、SwiftData 往返、PDF 文字抽取（中文與數字）、設定 |
-| `PitchCoachUITests` | 6 | 合成訊號驅動：調音器、長音、音階、背景中斷與恢復、自由練習記錄、趨勢與週報分享 |
+| `SignalKitTests` | 7 | 種子決定性、SNR 混合精度、人聲模擬的共振峰與顫音 |
+| `PitchDetectionTests` | 24 | 純正弦、二次泛音、SNR 20 dB、靜音與噪音、500 組性質測試、鋸齒波、共振峰人聲 171 組與顫音追蹤、串流切窗與電平、即時信箱 |
+| `AccompanimentTests` | 13 | 節拍器拍點精準不漂移、click 不被當成音高、drone、SongPlayer 預備拍／提示音／歌曲起點 host time |
+| `SingingEngineTests` | 36 | 旋律格式錯誤（AC-20）、時間軸與移調（AC-21）、內建旋律、顫音分析、去頭尾中位數、滑音（AC-16）、容許八度（AC-17）、人聲顫音完整鏈（AC-15）、起音 < 30 ms（AC-18）、±80 ms 邊界、時鐘、延遲校正 |
+| `PracticeEngineTests` | 49 | 調音器平滑、長音手算 fixture、到位 299／300 ms 與 ±15 抖動邊界、生命週期、自由練習、趨勢與週報（含歌唱） |
+| `PitchCoachTests`（App） | 28 | 中斷策略與通知轉換、SwiftData 往返（含歌唱）、PDF 文字抽取、設定、延遲校正儲存、伴奏樂譜轉換 |
+| `PitchCoachUITests` | 7 | 合成訊號驅動：調音器、長音、音階、背景中斷與恢復、自由練習、趨勢與週報分享、歌唱（移調音域同步、唱完整首、KTV 音高條） |
 
 UI 測試以啟動參數 `-syntheticScenario` 讓收音管線改吃合成訊號（只在 DEBUG 組態編譯），偵測、判定、儲存與畫面皆走正式路徑；`-uiTesting` 使用記憶體內儲存。
 
@@ -258,6 +371,8 @@ UI 測試以啟動參數 `-syntheticScenario` 讓收音管線改吃合成訊號�
 | 延遲 ≤ 150 ms（慢動作錄影） | 待實機測試（模擬器內部時間戳估計約 85 ms） |
 | 練習中來電、鬧鐘、插拔耳機不當機、恢復偵測、標記中斷 | 策略有單元測試、背景中斷有 UI 測試；實機待測 |
 | PDF 透過分享選單存到「檔案」 | 模擬器已驗證分享選單；實機待測 |
+| 歌唱：內建喇叭與藍牙耳機的節奏判定一致、起音誤差 ±80 ms（AC-19） | 待實機測試（回授自我測試＋真人演唱） |
+| 歌唱：喇叭外放時 voice processing 回音消除對歌聲的影響 | 待實機驗證 |
 
 ---
 
@@ -273,4 +388,9 @@ UI 測試以啟動參數 `-syntheticScenario` 讓收音管線改吃合成訊號�
 - **進入背景即暫停**，不支援背景收音（題目要求）。
 - **週報與趨勢的音名一律用升記號**（例如 A#4），音階練習畫面則依調號拼寫（B♭4）。
 - **iOS 27 模擬器**：`simctl privacy grant` 無法預先授予麥克風權限，第一次需手動按「允許」；模擬器的延遲數字不代表實機。
+- **歌唱模式**：
+  - KTV 音高曲線比「現在」線晚約 50–80 ms 出現（偵測需要一整個分析窗）；判定不受影響，因為判定以換算後的歌曲時間進行。
+  - 喇叭外放時的回音消除效果尚未在實機驗證；耳機演唱最可靠。
+  - 用耳機做延遲校正時需把耳機貼近麥克風；沒有校正的藍牙耳機只依 iOS 回報的延遲補償，可能差數十 ms。
+  - 每個音符太短（中段不足 1.5 個顫音週期）時不分析顫音，改用中位數。
 - 只支援 iPhone 直向與繁體中文。

@@ -15,6 +15,7 @@ xcodebuild test \
   -scheme PitchCoach \
   -destination "platform=iOS Simulator,name=$DEVICE" \
   -only-testing:PitchCoachUITests \
+  -derivedDataPath build/DerivedData \
   -resultBundlePath "$RESULT" \
   -quiet
 

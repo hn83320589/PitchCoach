@@ -112,7 +112,7 @@ extension DemoDataSeeder {
         var evaluator = SingingEvaluator(timeline: timeline, reference: reference, options: SingingOptions())
         for note in timeline.notes {
             // 高音偏低（越來越少）、一般音 ±8 cents 的隨機偏差；約 15% 的音起音延遲 100–150 ms
-            let bias = (note.pitch.midi >= 69 ? -30 * (1 - 0.5 * progress) : 0) + rng.gaussian() * 8
+            let bias = (note.pitch.midi >= 69 ? -32 + 8 * progress : 0) + rng.gaussian() * 8
             let late = rng.uniform() < 0.15 ? 0.1 + rng.uniform() * 0.05 : rng.gaussian() * 0.02
             let begin = note.start.seconds + late, end = note.end.seconds - 0.05
             var t = note.start.seconds - 0.04
