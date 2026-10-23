@@ -3,7 +3,7 @@
 | 項目 | 內容 |
 |---|---|
 | 報告日期 | 2026-10-23 |
-| 受測版本 | `eb260fb`（fix: 回音消除開不起來時引擎無限重啟、演唱卡在「預備…」） |
+| 受測版本 | `15e2c4d`（程式碼同 `cd38059`：同音連唱「沒有分開唱」修正；之後只改 CI 與文件） |
 | 測試範圍 | 驗收標準 AC-01～AC-21（含歌唱模式）、功能需求 FR-01～FR-21、非功能需求 NFR-01～NFR-06 |
 | 結論 | **能在 macOS 與模擬器驗證的驗收標準全部通過**。需要 iPhone 與耳機的項目（AC-08 實機延遲、AC-11、AC-12 實機中斷、AC-19）尚待實機量測，AC-13 的「存到檔案」尚待手動操作 |
 
@@ -13,9 +13,9 @@
 
 | 指標 | 結果 |
 |---|---|
-| 自動化測試 | **185 / 185 通過**，0 失敗、0 略過（題目要求 ≥ 55） |
+| 自動化測試 | **187 / 187 通過**，0 失敗、0 略過（題目要求 ≥ 55） |
 | 編譯警告 | **0**（Package 與 App 皆以全新建置目錄重新編譯確認） |
-| GitHub Actions | run [39951010800](https://github.com/hn83320589/PitchCoach/actions/runs/39951010800) 全綠：`swift test` 與 iOS App 建置 |
+| GitHub Actions | run [39959240215](https://github.com/hn83320589/PitchCoach/actions/runs/39959240215)：`swift test`（149 個）＋ iOS 模擬器上的 App 單元測試與 UI 測試（38 個） |
 | 第三方套件 | 0 個（Package 無外部相依、Xcode 專案無遠端套件參照） |
 
 | 驗收狀態 | 數量 | 項目 |
@@ -58,13 +58,13 @@ xcodebuild clean test -project PitchCoach.xcodeproj -scheme PitchCoach \
 | `SignalKitTests` | macOS | 7 | ✅ 全數通過 |
 | `PitchDetectionTests` | macOS | 24 | ✅ 全數通過 |
 | `AccompanimentTests` | macOS | 13 | ✅ 全數通過 |
-| `SingingEngineTests` | macOS | 36 | ✅ 全數通過 |
+| `SingingEngineTests` | macOS | 38 | ✅ 全數通過 |
 | `PracticeEngineTests` | macOS | 49 | ✅ 全數通過 |
 | `PitchCoachTests`（App 單元） | 模擬器 | 31 | ✅ 全數通過 |
 | `PitchCoachUITests` | 模擬器 | 7 | ✅ 全數通過 |
-| **合計** | | **185** | **✅ 185 / 185** |
+| **合計** | | **187** | **✅ 187 / 187** |
 
-UI 測試以啟動參數 `-syntheticScenario` 讓收音管線改吃合成訊號，偵測、判定、儲存與畫面都走正式路徑。UI 測試只在本機模擬器執行，CI 只建置 App、不跑 UI 測試。
+UI 測試以啟動參數 `-syntheticScenario` 讓收音管線改吃合成訊號，偵測、判定、儲存與畫面都走正式路徑，不需要麥克風權限。本機（iPhone 18 Pro、iOS 27.0）與 CI（從 runner 最新的 iOS runtime 挑第一台 iPhone）都會執行。
 
 ---
 
@@ -74,7 +74,7 @@ UI 測試以啟動參數 `-syntheticScenario` 讓收音管線改吃合成訊號�
 
 | # | 驗收標準 | 狀態 | 證據 |
 |---|---|---|---|
-| AC-01 | Xcode 開啟即可建置（模擬器／實機） | ✅ | CI 建置成功；本機乾淨建置 0 警告。實機需先設定 Team 與 Bundle ID（見 README） |
+| AC-01 | Xcode 開啟即可建置（模擬器／實機） | ✅ | CI 在 iOS 模擬器建置並測試成功；本機乾淨建置 0 警告。實機需先設定 Team 與 Bundle ID（見 README） |
 | AC-02 | 純正弦 65–2,100 Hz 每半音、44.1k／48k，誤差 < 1¢ | ✅ | `pureSineEverySemitoneAt44100/48000IsWithinOneCent`。**實測**：62 個頻率，兩種取樣率最大 **0.0010¢**、平均 0.0002¢ |
 | AC-03 | 二次泛音強 2 倍不發生八度錯誤 | ✅ | `strongSecondHarmonicCausesNoOctaveErrorAt44100/48000`。**實測**：八度錯誤 **0**，最大誤差 0.0007¢（44.1k）／0.0005¢（48k） |
 | AC-04 | 白噪音 SNR 20 dB 誤差 < 3¢ | ✅ | `whiteNoiseAt20dBSNRStaysWithinThreeCents`。**實測**：測試種子最大 1.26¢（44.1k）／1.64¢（48k）；20 個種子各 62 頻率的壓力量測（各 1,240 次）最大 **2.25¢**／1.84¢，沒有漏偵測 |
@@ -87,17 +87,17 @@ UI 測試以啟動參數 `-syntheticScenario` 讓收音管線改吃合成訊號�
 | AC-11 | 內建麥克風／有線耳機／藍牙耳機讀數差 ±3¢，附截圖 | ⏳ | 模擬器無法區分這三種路由。設計上一律固定內建麥克風收音；步驟見 [DEVICE_TESTING.md](DEVICE_TESTING.md) |
 | AC-12 | 模擬來電／插拔耳機不當機、可恢復、標記中斷 | 🟡 | 狀態機與事件策略：`interruptionWhileRunningMarksSessionInterruptedWithReason`、`phoneCallInterruptsPracticeAndResumesDetectionAfterward`、`pluggingOrUnpluggingHeadphonesInterruptsPracticeAndRebuildsEngine`、`mediaServicesResetAndConfigurationChangeRestartEngine`、`configurationChangeDuringSongInterruptsSinging` 等。UI：`testBackgroundingDuringLongToneMarksSessionInterrupted`。**實機來電、鬧鐘、插拔耳機待測** |
 | AC-13 | PDF 數據與紀錄一致、中文正常、可存到「檔案」 | 🟡 | `weeklyReportSummarizesPracticeAndScores`、`pdfContainsSearchableChineseTextAndReportNumbers`、`pdfPageIsA4`；UI：`testHistoryShowsTrendsAndGeneratesWeeklyReport`（產生週報並開啟分享選單）。**「存到檔案」尚待手動操作**（模擬器即可完成） |
-| AC-14 | 測試 ≥ 40 個全數通過 | ✅ | 185 個全數通過 |
+| AC-14 | 測試 ≥ 40 個全數通過 | ✅ | 187 個全數通過 |
 
 ### 4.2 歌唱模式（AC-14'～AC-21）
 
 | # | 驗收標準 | 狀態 | 證據 |
 |---|---|---|---|
-| AC-14' | 測試 ≥ 55 個 | ✅ | 185 個全數通過 |
+| AC-14' | 測試 ≥ 55 個 | ✅ | 187 個全數通過 |
 | AC-15 | 人聲模擬（泛音＋共振峰＋5.5 Hz ±60¢ 顫音）：中心 < 5¢、速度 < 0.5 Hz、幅度 < 10¢ | ✅ | `vibratoVoiceYieldsCenterRateAndDepth`（男、女、童聲三組）。**實測**見下表 |
 | AC-16 | 前 20% 從 −100¢ 滑上來仍判定「準」 | ✅ | `glideIntoFirstTwentyPercentStillCountsAsAccurate`（判定器）、`glidingVoiceIsStillAccurate`（人聲走完整條處理鏈） |
 | AC-17 | 容許八度：整首低八度 → 準；關閉 → 偏低 | ✅ | `octaveToleranceDecidesWhetherLowOctaveCounts`、`lowOctaveVoiceDependsOnOctaveTolerance` |
-| AC-18 | 合成演唱訊號，起音誤差 < 30 ms | ✅ | `synthesizedSingingOnsetsAreLocatedWithinThirtyMilliseconds`、`legatoPitchChangeIsDetectedAtPitchCrossing`。**實測**見下表 |
+| AC-18 | 合成演唱訊號，起音誤差 < 30 ms | ✅ | `synthesizedSingingOnsetsAreLocatedWithinThirtyMilliseconds`、`legatoPitchChangeIsDetectedAtPitchCrossing`；同音連唱沒有重新咬字時不給假的起音：`repeatedNoteSungAsOneSustainedToneIsNotSeparated`、`fastRepeatedNotesWithoutRearticulationAreNotCountedOnTime`。**實測**見下表 |
 | AC-19 | 實機：內建喇叭與藍牙耳機的節奏判定一致、起音誤差 ±80 ms | ⏳ | 規則：`eightyMillisecondBoundaryDecidesOnTimeEarlyOrLate`、`songClockUsesWindowCenterAndRemovesLatencies`、`offsetIsMedianOnsetDelayOfCalibrationTones`。模擬器回授試跑見 §5.2。**實機喇叭／藍牙量測待做** |
 | AC-20 | 自訂格式錯誤指出第幾個音符與原因、不當機 | ✅ | `invalidNoteNameReportsIndexTokenAndReason`、`missingOrInvalidOctaveIsReported`、`missingOrInvalidDurationIsReported`、`emptyInputIsAnError`、`notesOutsideSingableRangeAreRejected` |
 | AC-21 | 移調後目標音高、音高條、判定同步改變 | ✅ | `transposingShiftsEveryPitchAndKeepsRests`、`transpositionChangesPitchButNotTiming`、`transpositionMovesTargetsAndVerdicts`、`playerScoreFollowsTransposedTimeline`；UI：`testSingingTranspositionAndFullSongWithKaraokeRoll`（移調 +2 後音域由 C4–G4 變成 D4–A4） |
@@ -166,8 +166,9 @@ App 從 Mac 喇叭播放 8 個 A4 提示音，由 Mac 麥克風收回：
 | # | 問題 | 嚴重度 | 狀態 |
 |---|---|---|---|
 | 1 | 開啟回音消除的引擎在模擬器上啟動約 0.1 秒就自己停下，App 每 0.45 秒重建一次而陷入無限循環；演唱中引擎重建後畫面永遠停在「預備…」 | 高 | **已修正**（`eb260fb`）：連續 2 次停下就退回不消除的模式；演唱中引擎重建時標記「中斷：收音失敗」並保留已唱完的音。新增 3 個測試，並在模擬器以真實音訊驗證 |
-| 2 | Xcode 按 Run 時顯示 `Unable to resolve module dependency: 'SingingEngine'` | 低（環境） | Xcode 自己的建置快取過期，程式碼沒問題；清除建置資料夾（⇧⌘K）即可。命令列與 CI 都使用乾淨的建置目錄 |
-| 3 | 某次回授測試中，提示音有幾個音被讀成基頻的 1/2～1/5（次諧波） | 待確認 | 可能是提示音衰減後音量接近背景噪音所致；無法確定當時是否完全沒有人出聲。不影響有人演唱時的判定（歌聲遠大於提示音），但可能影響實機的回音消除驗證。需要一段確定沒有人出聲的錄音才能下結論 |
+| 2 | 同音重複卻連成一個長音（沒有重新咬字）時，三種起音線索都不存在，退回規則取到前一個音的 frame：一般速度判定「提早約 250 ms」，200 BPM 十六分音符反而判定「準時」（程式碼審查提出，合成測試證實） | 中 | **已修正**（`cd38059`）：前一個音同音高且發聲沒有中斷時，標示「沒有分開唱」，不計入節奏正確率。新增 2 個測試 |
+| 3 | Xcode 按 Run 時顯示 `Unable to resolve module dependency: 'SingingEngine'` | 低（環境） | Xcode 自己的建置快取過期，程式碼沒問題；清除建置資料夾（⇧⌘K）即可。命令列與 CI 都使用乾淨的建置目錄 |
+| 4 | 某次回授測試中，提示音有幾個音被讀成基頻的 1/2～1/5（次諧波） | 待確認 | 可能是提示音衰減後音量接近背景噪音所致；無法確定當時是否完全沒有人出聲。不影響有人演唱時的判定（歌聲遠大於提示音），但可能影響實機的回音消除驗證。需要一段確定沒有人出聲的錄音才能下結論 |
 
 ---
 
