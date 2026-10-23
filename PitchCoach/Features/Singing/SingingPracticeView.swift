@@ -131,6 +131,8 @@ private struct SingingSetupView: View {
                 .disabled(pipeline.state != .running || timeline.timeline == nil)
                 .listRowBackground(Color.clear)
                 .accessibilityIdentifier("practice.start")
+            } footer: {
+                if let notice = AudioUnavailableNotice(state: pipeline.state) { AudioUnavailableFooter(notice: notice) }
             }
         }
     }

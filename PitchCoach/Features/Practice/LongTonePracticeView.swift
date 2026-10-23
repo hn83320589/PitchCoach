@@ -23,7 +23,7 @@ struct LongTonePracticeView: View {
         switch model.phase {
         case .setup:
             LongToneSetupView(model: model, reference: settings.reference,
-                              canStart: pipeline.state == .running) {
+                              audioNotice: AudioUnavailableNotice(state: pipeline.state)) {
                 model.start(reference: settings.reference)
             }
         case .running:
@@ -65,7 +65,8 @@ struct LongTonePracticeView: View {
 private struct LongToneSetupView: View {
     @Bindable var model: LongTonePracticeModel
     let reference: TuningReference
-    let canStart: Bool
+    /// 收音不可用時的提示；nil 表示可以開始。
+    let audioNotice: AudioUnavailableNotice?
     let start: () -> Void
 
     private var noteName: Binding<PitchClass> {
@@ -115,10 +116,10 @@ private struct LongToneSetupView: View {
                 }
                 .accessibilityIdentifier("practice.start")
                 .buttonStyle(.borderedProminent)
-                .disabled(!isInRange || !canStart)
+                .disabled(!isInRange || audioNotice != nil)
                 .listRowBackground(Color.clear)
             } footer: {
-                if !canStart { Text("收音尚未啟動。") }
+                if let audioNotice { AudioUnavailableFooter(notice: audioNotice) }
             }
         }
     }

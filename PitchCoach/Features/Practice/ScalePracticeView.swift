@@ -22,7 +22,7 @@ struct ScalePracticeView: View {
     private func content(_ model: ScalePracticeModel) -> some View {
         switch model.phase {
         case .setup:
-            ScaleSetupView(model: model, reference: settings.reference, canStart: pipeline.state == .running) {
+            ScaleSetupView(model: model, reference: settings.reference, audioNotice: AudioUnavailableNotice(state: pipeline.state)) {
                 model.start(reference: settings.reference)
             }
         case .running:
@@ -63,7 +63,8 @@ struct ScalePracticeView: View {
 private struct ScaleSetupView: View {
     @Bindable var model: ScalePracticeModel
     let reference: TuningReference
-    let canStart: Bool
+    /// 收音不可用時的提示；nil 表示可以開始。
+    let audioNotice: AudioUnavailableNotice?
     let start: () -> Void
 
     var body: some View {
@@ -99,13 +100,13 @@ private struct ScaleSetupView: View {
                 }
                 .accessibilityIdentifier("practice.start")
                 .buttonStyle(.borderedProminent)
-                .disabled(!canStart || !octaves.contains(model.startOctave))
+                .disabled(audioNotice != nil || !octaves.contains(model.startOctave))
                 .listRowBackground(Color.clear)
             } footer: {
                 if let setupError = model.setupError {
                     Text(setupError).foregroundStyle(.red)
-                } else if !canStart {
-                    Text("收音尚未啟動。")
+                } else if let audioNotice {
+                    AudioUnavailableFooter(notice: audioNotice)
                 }
             }
         }
