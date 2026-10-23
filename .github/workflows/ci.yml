@@ -10,7 +10,7 @@ jobs:
     name: swift test (PitchCoachKit)
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Show toolchain
         run: swift --version
       - name: Run package tests
@@ -20,7 +20,7 @@ jobs:
     name: xcodebuild (iOS Simulator)
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build app
         run: >
           xcodebuild build

@@ -1,5 +1,7 @@
 # PitchCoach 音準練習教練
 
+[![CI](https://github.com/hn83320589/PitchCoach/actions/workflows/ci.yml/badge.svg)](https://github.com/hn83320589/PitchCoach/actions/workflows/ci.yml)
+
 給兒童小提琴與長笛學生的 iPhone 音準練習 App：即時調音器、長音與音階練習、練習紀錄與趨勢，並能產生 PDF 週報分享給老師。
 
 - **平台**：iOS 17 以上、iPhone 直向
