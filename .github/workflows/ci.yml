@@ -35,8 +35,11 @@ jobs:
           xcrun simctl list devices available | grep "$UDID"
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
       - name: Build and run unit and UI tests
+        # 以環境變數傳入，不在腳本中直接展開 ${{ }} 運算式
+        env:
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
         run: >
           xcodebuild test
           -project PitchCoach.xcodeproj
           -scheme PitchCoach
-          -destination 'id=${{ steps.simulator.outputs.udid }}'
+          -destination "id=$SIMULATOR_UDID"
