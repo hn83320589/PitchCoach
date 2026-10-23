@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 @main
@@ -11,5 +12,6 @@ struct PitchCoachApp: App {
                 .environment(settings)
                 .environment(pipeline)
         }
+        .modelContainer(for: [PracticeSessionRecord.self, NoteStatRecord.self])
     }
 }
